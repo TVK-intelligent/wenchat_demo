@@ -4,6 +4,8 @@ import com.example.demo.client.ChatClient;
 import lombok.extern.slf4j.Slf4j;
 import java.nio.charset.StandardCharsets;
 import java.io.PrintStream;
+import javax.net.ssl.*;
+import java.security.cert.X509Certificate;
 
 /**
  * 🚀 WenChat CLI Client - Main Application Entry Point
@@ -23,6 +25,9 @@ public class ChatClientApp {
 
     public static void main(String[] args) {
         try {
+            // 0. Disable SSL verification for ngrok (self-signed cert)
+            disableSSLVerification();
+            
             // 1. Set UTF-8 encoding for entire JVM (must be done early)
             System.setProperty("file.encoding", "UTF-8");
             System.setProperty("stdout.encoding", "UTF-8");
@@ -72,4 +77,40 @@ public class ChatClientApp {
             System.exit(1);
         }
     }
+
+    /**
+     * Disable SSL certificate verification (for ngrok self-signed certificates)
+     * ⚠️ WARNING: Only use for development/testing with trusted self-signed certs!
+     */
+    private static void disableSSLVerification() {
+        try {
+            // Create a trust manager that trusts all certificates
+            TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return null;
+                    }
+
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {
+                    }
+
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {
+                    }
+                }
+            };
+
+            // Install the trust manager
+            SSLContext sslContext = SSLContext.getInstance("SSL");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+            HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
+
+            // Disable hostname verification
+            HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
+
+            log.debug("⚠️ SSL verification disabled (for ngrok)");
+        } catch (Exception e) {
+            log.error("Failed to disable SSL verification: {}", e.getMessage());
+        }
+    }
 }
+
