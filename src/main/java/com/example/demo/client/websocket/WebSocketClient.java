@@ -75,7 +75,10 @@ public class WebSocketClient {
         // Dùng ServerConfig để get WS URL (đảm bảo luôn lấy URL mới nhất)
         String wsUrl = ServerConfig.getWsUrl();
 
-        TerminalUI.printInfo("Connecting to " + wsUrl + "...");
+        // Add token as query parameter (for ngrok compatibility)
+        wsUrl += "?token=" + token;
+
+        TerminalUI.printInfo("Connecting to " + wsUrl.split("\\?")[0] + "...");
 
         try {
             StompSessionHandler handler = new MySessionHandler(this.connectionLatch);
