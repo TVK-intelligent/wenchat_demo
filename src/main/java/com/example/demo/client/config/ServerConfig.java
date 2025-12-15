@@ -9,13 +9,15 @@ import java.util.Properties;
  * 🔧 ServerConfig - Quản lý cấu hình server URL
  * 
  * Ưu tiên cấu hình:
- * 1. Biến môi trường: WENCHAT_SERVER_URL
- * 2. File cấu hình: config.properties (trong thư mục gốc)
- * 3. Classpath: config.properties
- * 4. Mặc định: http://localhost:8081
+ * 1. Biến môi trường: WEBCHAT_G10_SERVER_URL
+ * 2. File cấu hình: config.properties
+ * 3. Mặc định: http://26.6.143.150:8081 (Radmin VPN)
  */
 @Slf4j
 public class ServerConfig {
+
+    private static final String DEFAULT_SERVER_URL = "http://26.6.143.150:8081";
+    private static final String DEFAULT_WS_URL = "ws://26.6.143.150:8081/ws";
 
     private static String serverUrl;
     private static String wsUrl;
@@ -30,27 +32,23 @@ public class ServerConfig {
      * Load cấu hình từ các nguồn (theo ưu tiên)
      */
     private static void loadConfig() {
-        log.debug("Loading server configuration...");
-
-        // 1. Kiểm tra System property (được set từ command line argument)
-        String sysUrl = System.getProperty("WENCHAT_SERVER_URL");
+        // 1. Kiểm tra System property
+        String sysUrl = System.getProperty("WEBCHAT_G10_SERVER_URL");
         if (sysUrl != null && !sysUrl.trim().isEmpty()) {
             serverUrl = sysUrl.trim();
-            log.info("✓ Using server URL from System property: {}", serverUrl);
             updateWsUrl();
             return;
         }
 
         // 2. Kiểm tra biến môi trường
-        String envUrl = System.getenv("WENCHAT_SERVER_URL");
+        String envUrl = System.getenv("WEBCHAT_G10_SERVER_URL");
         if (envUrl != null && !envUrl.trim().isEmpty()) {
             serverUrl = envUrl.trim();
-            log.info("✓ Using server URL from environment: {}", serverUrl);
             updateWsUrl();
             return;
         }
 
-        // 2. Kiểm tra config.properties trong classpath (src/main/resources/)
+        // 3. Kiểm tra config.properties trong classpath
         try {
             InputStream inputStream = ServerConfig.class.getClassLoader().getResourceAsStream("config.properties");
             if (inputStream != null) {
@@ -59,7 +57,6 @@ public class ServerConfig {
                 if (!url.isEmpty()) {
                     serverUrl = url;
                     wsUrl = properties.getProperty("ws.url", "").trim();
-                    log.info("✓ Using server URL from classpath config.properties: {}", serverUrl);
                     if (wsUrl.isEmpty()) {
                         updateWsUrl();
                     }
@@ -67,12 +64,11 @@ public class ServerConfig {
                 }
             }
         } catch (IOException e) {
-            log.warn("⚠️ Failed to read config.properties from classpath: {}", e.getMessage());
+            log.warn("Failed to read config.properties: {}", e.getMessage());
         }
 
-        // 3. Mặc định
-        serverUrl = "http://localhost:8081";
-        log.info("✓ Using default server URL: {}", serverUrl);
+        // 4. Mặc định
+        serverUrl = DEFAULT_SERVER_URL;
         updateWsUrl();
     }
 
@@ -93,32 +89,29 @@ public class ServerConfig {
      * Lấy URL server HTTP/HTTPS
      */
     public static String getServerUrl() {
-        return serverUrl != null ? serverUrl : "http://localhost:8081";
+        return serverUrl != null ? serverUrl : DEFAULT_SERVER_URL;
     }
 
     /**
      * Lấy URL WebSocket (WS/WSS)
      */
     public static String getWsUrl() {
-        return wsUrl != null ? wsUrl : "ws://localhost:8081/ws";
+        return wsUrl != null ? wsUrl : DEFAULT_WS_URL;
     }
 
     /**
-     * Cập nhật URL server tại runtime (cho ngrok hoặc dynamic URL)
+     * Cập nhật URL server tại runtime
      */
     public static void setServerUrl(String url) {
         serverUrl = url.trim();
         updateWsUrl();
-        log.info("✓ Updated server URL to: {}", serverUrl);
-        log.info("✓ Updated WebSocket URL to: {}", wsUrl);
     }
 
     /**
-     * Cập nhật URL WebSocket riêng (nếu cần)
+     * Cập nhật URL WebSocket riêng
      */
     public static void setWsUrl(String url) {
         wsUrl = url.trim();
-        log.info("✓ Updated WebSocket URL to: {}", wsUrl);
     }
 
     /**
@@ -126,8 +119,8 @@ public class ServerConfig {
      */
     public static void printConfig() {
         System.out.println("\n📋 Server Configuration:");
-        System.out.println("├─ Server URL (HTTP/HTTPS): " + getServerUrl());
-        System.out.println("└─ WebSocket URL (WS/WSS):  " + getWsUrl());
+        System.out.println("├─ Server URL: " + getServerUrl());
+        System.out.println("└─ WebSocket URL: " + getWsUrl());
         System.out.println();
     }
 }

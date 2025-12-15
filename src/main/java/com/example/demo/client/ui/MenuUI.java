@@ -14,7 +14,7 @@ public class MenuUI {
     public static int showMainMenu() {
         TerminalUI.clearScreen();
         TerminalUI.println(
-                TerminalUI.BRIGHT_CYAN + "+------ WENCHAT - Main Menu ------+" + TerminalUI.RESET);
+                TerminalUI.BRIGHT_CYAN + "+------ WebChat Group 10 - Main Menu ------+" + TerminalUI.RESET);
         TerminalUI.println("");
 
         TerminalUI.println(TerminalUI.GREEN + "  1. Login" + TerminalUI.RESET);
@@ -128,6 +128,12 @@ public class MenuUI {
             try {
                 String input = TerminalUI.getInput(
                         TerminalUI.BRIGHT_CYAN + "Choose option [" + min + "-" + max + "]: " + TerminalUI.RESET);
+
+                // Handle empty input - silently re-prompt without error message
+                if (input.isEmpty()) {
+                    continue;
+                }
+
                 int choice = Integer.parseInt(input);
 
                 if (choice >= min && choice <= max) {
@@ -186,7 +192,15 @@ public class MenuUI {
     public static void waitForContinue() {
         try {
             TerminalUI.print(TerminalUI.GRAY + "Press Enter to continue..." + TerminalUI.RESET);
-            System.in.read();
+            // Clear entire input buffer to consume any pending input
+            while (System.in.available() > 0) {
+                System.in.read();
+            }
+            System.in.read(); // Wait for new Enter
+            // Clear again to ensure no leftover input
+            while (System.in.available() > 0) {
+                System.in.read();
+            }
         } catch (Exception e) {
             // Ignore
         }

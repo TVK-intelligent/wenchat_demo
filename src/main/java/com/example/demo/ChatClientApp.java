@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import com.example.demo.client.ChatClient;
+import com.example.demo.client.config.ServerConfig;
 import lombok.extern.slf4j.Slf4j;
 import java.nio.charset.StandardCharsets;
 import java.io.PrintStream;
@@ -8,9 +9,9 @@ import javax.net.ssl.*;
 import java.security.cert.X509Certificate;
 
 /**
- * 🚀 WenChat CLI Client - Main Application Entry Point
+ * 🚀 WebChat Group 10 CLI Client - Main Application Entry Point
  *
- * Đây là file chính để chạy toàn bộ dự án WenChat CLI Client.
+ * Đây là file chính để chạy toàn bộ dự án WebChat Group 10 CLI Client.
  *
  * Cách chạy:
  * 1. Build dự án: mvn clean package
@@ -50,20 +51,18 @@ public class ChatClientApp {
                 }
             }
 
-            log.info("🚀 Starting WenChat CLI Client Application...");
+            log.info("🚀 Starting WebChat Group 10 CLI Client Application...");
             log.info("Java version: {}", System.getProperty("java.version"));
             log.info("Operating system: {} {}", System.getProperty("os.name"), System.getProperty("os.version"));
 
             // Set server URL from command line argument or environment variable
             if (args.length > 0) {
-                System.setProperty("WENCHAT_SERVER_URL", args[0]);
+                System.setProperty("WEBCHAT_G10_SERVER_URL", args[0]);
                 log.info("✅ Using server URL: {}", args[0]);
-            } else if (System.getenv("WENCHAT_SERVER_URL") != null) {
-                log.info("✅ Using server URL from env: {}", System.getenv("WENCHAT_SERVER_URL"));
+            } else if (System.getenv("WEBCHAT_G10_SERVER_URL") != null) {
+                log.info("✅ Using server URL from env: {}", System.getenv("WEBCHAT_G10_SERVER_URL"));
             } else {
-                log.info("ℹ️ Using default server URL: http://localhost:8081");
-                log.info(
-                        "💡 Tip: Pass server URL as argument: java -jar wenchat-client.jar https://your-url.ngrok-free.dev");
+                log.info("ℹ️ Using default server URL: {}", ServerConfig.getServerUrl());
             }
 
             // Khởi tạo và khởi động ChatClient

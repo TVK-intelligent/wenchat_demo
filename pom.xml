@@ -16,7 +16,7 @@
     <artifactId>demo</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>demo</name>
-    <description>WenChat CLI Client</description>
+    <description>WebChat Group 10 CLI Client</description>
 
     <properties>
         <java.version>21</java.version>
@@ -108,6 +108,7 @@
                 <version>3.11.0</version>
                 <configuration>
                     <release>${java.version}</release>
+                    <encoding>UTF-8</encoding>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -142,7 +143,7 @@
                             <mainClass>com.example.demo.ChatClientApp</mainClass>
                         </manifest>
                     </archive>
-                    <finalName>wenchat-client</finalName>
+                    <finalName>webchat-g10-client</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
                 </configuration>
                 <executions>

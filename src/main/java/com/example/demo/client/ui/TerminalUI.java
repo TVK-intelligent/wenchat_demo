@@ -1,6 +1,7 @@
 package com.example.demo.client.ui;
 
 import java.nio.charset.StandardCharsets;
+import java.io.PrintStream;
 import com.example.demo.client.util.UTF8Input;
 
 /**
@@ -10,6 +11,9 @@ public class TerminalUI {
 
     // Static Scanner - reuse for multiple inputs with UTF-8 charset
     private static final java.util.Scanner INPUT_SCANNER = new java.util.Scanner(System.in, StandardCharsets.UTF_8);
+    
+    // UTF-8 PrintStream for proper character output on all platforms
+    private static final PrintStream OUT = new PrintStream(System.out, true, StandardCharsets.UTF_8);
 
     // ANSI Color Codes
     public static final String RESET = "\u001B[0m";
@@ -39,7 +43,7 @@ public class TerminalUI {
     public static void drawHeader() {
         clearScreen();
         printLine("═", TERMINAL_WIDTH, BRIGHT_CYAN);
-        println(BRIGHT_CYAN + "  ╔═══════ 💬 WENCHAT TERMINAL CLI CLIENT v1.0 ═══════╗" + RESET);
+        println(BRIGHT_CYAN + "  ╔═══════ 💬 WEBCHAT GROUP 10 TERMINAL CLI CLIENT v1.0 ═══════╗" + RESET);
         println(BRIGHT_CYAN + "  ║       🌐 WebSocket Real-time Chat App 🌐         ║" + RESET);
         println(BRIGHT_CYAN + "  ╚═══════════════════════════════════════════════════╝" + RESET);
         printLine("═", TERMINAL_WIDTH, BRIGHT_CYAN);
@@ -202,14 +206,14 @@ public class TerminalUI {
      * 📤 Print with newline
      */
     public static void println(String message) {
-        System.out.println(message);
+        OUT.println(message);
     }
 
     /**
      * 📤 Print without newline
      */
     public static void print(String message) {
-        System.out.print(message);
+        OUT.print(message);
     }
 
     /**
