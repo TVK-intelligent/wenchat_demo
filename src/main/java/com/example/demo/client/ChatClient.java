@@ -181,31 +181,29 @@ public class ChatClient {
 
             // Subscribe to user status updates
             wsClient.subscribeToUserStatus(statusUpdate -> {
-                // Handle real-time user status changes (online/offline)
-                log.debug("👥 User status update received: {} ({})", statusUpdate.getUsername(),
-                        statusUpdate.getStatus());
+                // Handle real-time user status changes (online/offline) - silently update cache
+
                 // Update friend list cache in real-time
                 if (friendListCache != null && statusUpdate.getUserId() != null) {
-                    for (java.util.Map<String, Object> friend : friendListCache) {
-                        Long friendUserId = null;
-                        java.util.Map<String, Object> userData = (java.util.Map<String, Object>) friend.get("user");
-                        if (userData != null) {
-                            Object idObj = userData.get("id");
-                            if (idObj instanceof Integer) {
-                                friendUserId = ((Integer) idObj).longValue();
-                            } else if (idObj instanceof Long) {
-                                friendUserId = (Long) idObj;
-                            }
-                        }
+                    for (java.util.Map<String, Object> friendship : friendListCache) {
+                        // Check both "user" and "friend" fields
+                        for (String fieldName : new String[] { "user", "friend" }) {
+                            Object fieldObj = friendship.get(fieldName);
+                            if (fieldObj instanceof java.util.Map) {
+                                java.util.Map<String, Object> userData = (java.util.Map<String, Object>) fieldObj;
+                                Object idObj = userData.get("id");
+                                Long friendUserId = null;
+                                if (idObj instanceof Integer) {
+                                    friendUserId = ((Integer) idObj).longValue();
+                                } else if (idObj instanceof Long) {
+                                    friendUserId = (Long) idObj;
+                                }
 
-                        // If this is the friend whose status changed, update it
-                        if (friendUserId != null && friendUserId.equals(statusUpdate.getUserId())) {
-                            if (userData != null) {
-                                userData.put("isOnline", statusUpdate.getIsOnline());
-                                log.debug("✅ Updated friend status in cache: {} = {}",
-                                        statusUpdate.getUsername(), statusUpdate.getIsOnline());
+                                // If this is the friend whose status changed, update it
+                                if (friendUserId != null && friendUserId.equals(statusUpdate.getUserId())) {
+                                    userData.put("isOnline", statusUpdate.getIsOnline());
+                                }
                             }
-                            break;
                         }
                     }
                 }
@@ -722,7 +720,19 @@ public class ChatClient {
             return;
         }
 
-        if (chatService.leaveRoom(currentRoomId)) {
+        // Try to leave room
+        boolean success = chatService.leaveRoom(currentRoomId);
+
+        // If failed with 400 (owner), ask if they want to delete
+        if (!success) {
+            String response = TerminalUI.getInput("You are the room owner. Delete room instead? (yes/no): ");
+            if (response.equalsIgnoreCase("yes")) {
+                if (chatService.deleteRoom(currentRoomId)) {
+                    isInRoom = false;
+                    currentRoomId = null;
+                }
+            }
+        } else {
             isInRoom = false;
             currentRoomId = null;
             TerminalUI.printSuccess("Left room");
@@ -737,6 +747,19 @@ public class ChatClient {
             handleMenuLeaveRoom();
         }
 
+        // 🔴 IMPORTANT: Stop heartbeat thread FIRST to prevent it from sending online
+        // status
+        isLoggedIn = false;
+        if (heartbeatThread != null) {
+            heartbeatThread.interrupt();
+            try {
+                heartbeatThread.join(1000); // Wait max 1 second for thread to stop
+            } catch (InterruptedException e) {
+                // Ignore
+            }
+            heartbeatThread = null;
+        }
+
         // Send offline status to server before disconnecting
         if (currentUserId != null) {
             wsClient.sendStatusChange(currentUserId, false);
@@ -745,8 +768,14 @@ public class ChatClient {
         // Call logout API to set user status to OFFLINE
         chatService.logout();
 
+        // Small delay to ensure offline status is broadcasted before disconnect
+        try {
+            Thread.sleep(200);
+        } catch (InterruptedException e) {
+            // Ignore
+        }
+
         wsClient.disconnect();
-        isLoggedIn = false;
         currentUsername = null;
         currentUserId = null;
         currentRoomId = null;
@@ -859,13 +888,9 @@ public class ChatClient {
      * 👥 Menu: View friends list (online/offline)
      */
     private void handleMenuViewFriends() {
-        // Use cached friend list if available to show real-time status
-        // Only fetch from API if cache is empty
-        List<java.util.Map<String, Object>> friends = friendListCache;
-
-        if (friends == null || friends.isEmpty()) {
-            friends = chatService.getFriends();
-        }
+        // Always fetch fresh data from API to ensure accurate online status
+        TerminalUI.printInfo("Fetching friends list...");
+        List<java.util.Map<String, Object>> friends = chatService.getFriends();
 
         if (friends == null || friends.isEmpty()) {
             TerminalUI.printWarning("You have no friends yet");
@@ -1040,7 +1065,6 @@ public class ChatClient {
         }
 
         heartbeatThread = new Thread(() -> {
-            log.debug("❤️ Heartbeat thread started for user {}", currentUserId);
             while (isLoggedIn) {
                 try {
                     Thread.sleep(12000); // Send heartbeat every 12 seconds
@@ -1048,16 +1072,14 @@ public class ChatClient {
                     if (isLoggedIn && currentUserId != null) {
                         // Send heartbeat to server - update lastHeartbeat
                         wsClient.sendStatusChange(currentUserId, true);
-                        log.debug("💓 Heartbeat sent for user {}", currentUserId);
+                        // log.debug("💓 Heartbeat sent for user {}", currentUserId);
                     }
                 } catch (InterruptedException e) {
-                    log.debug("Heartbeat thread interrupted");
                     break;
                 } catch (Exception e) {
-                    log.warn("Heartbeat error: {}", e.getMessage());
+                    // Silently ignore heartbeat errors
                 }
             }
-            log.debug("❤️ Heartbeat thread stopped");
         });
         heartbeatThread.setName("HeartbeatThread-" + currentUserId);
         heartbeatThread.setDaemon(true);

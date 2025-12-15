@@ -21,6 +21,7 @@ public class User {
     private Status status;
     private String avatarUrl;
     private Boolean showOnlineStatus;
+    private Boolean isOnline;
     private LocalDateTime createdAt;
 
     public enum Status {

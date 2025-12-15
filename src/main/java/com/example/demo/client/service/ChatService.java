@@ -198,6 +198,21 @@ public class ChatService {
     }
 
     /**
+     * 🗑️ Delete room (only for owner)
+     */
+    public boolean deleteRoom(Long roomId) {
+        try {
+            delete("/api/rooms/" + roomId, true);
+            TerminalUI.printSuccess("Room " + roomId + " deleted successfully");
+            return true;
+
+        } catch (Exception e) {
+            TerminalUI.printError("Failed to delete room: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * 🔍 Search users by username
      */
     public List<User> searchUsers(String keyword) {

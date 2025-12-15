@@ -191,7 +191,6 @@ public class WebSocketClient {
 
     private void subscribeToDestination(String destination, Consumer<ChatMessage> callback, String subscriptionName) {
         try {
-            log.debug("🔔 [SUBSCRIPTION] Subscribing to {} ({})", destination, subscriptionName);
 
             stompSession.subscribe(destination, new StompFrameHandler() {
                 @Override
@@ -230,7 +229,6 @@ public class WebSocketClient {
                 }
             });
 
-            log.debug("✓ [SUBSCRIPTION] Successfully subscribed to {} ({})", destination, subscriptionName);
             subscriptionIds.put(subscriptionName, destination);
         } catch (Exception e) {
             log.error("❌ [SUBSCRIPTION_ERROR-{}] Failed: {}", subscriptionName, e.getMessage(), e);
@@ -338,7 +336,6 @@ public class WebSocketClient {
 
         try {
             String destination = "/topic/user-status";
-            log.debug("👥 [SUBSCRIPTION] Subscribing to user status updates: {}", destination);
 
             stompSession.subscribe(destination, new StompFrameHandler() {
                 @Override
@@ -376,7 +373,6 @@ public class WebSocketClient {
             });
 
             subscriptionIds.put("user-status", destination);
-            log.debug("✓ [SUBSCRIPTION] Successfully subscribed to user status");
         } catch (Exception e) {
             log.error("❌ [SUBSCRIPTION_ERROR] Failed to subscribe to user status: {}", e.getMessage(), e);
         }
@@ -399,7 +395,7 @@ public class WebSocketClient {
             String json = objectMapper.writeValueAsString(statusMessage);
             byte[] payload = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             stompSession.send("/app/status/change", payload);
-            log.debug("📤 Sent status change: userId={}, isOnline={}", userId, isOnline);
+            // log.debug("📤 Sent status change: userId={}, isOnline={}", userId, isOnline);
         } catch (Exception e) {
             log.error("❌ Failed to send status change: {}", e.getMessage(), e);
         }
