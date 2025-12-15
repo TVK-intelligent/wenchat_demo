@@ -11,7 +11,7 @@ public class TerminalUI {
 
     // Static Scanner - reuse for multiple inputs with UTF-8 charset
     private static final java.util.Scanner INPUT_SCANNER = new java.util.Scanner(System.in, StandardCharsets.UTF_8);
-    
+
     // UTF-8 PrintStream for proper character output on all platforms
     private static final PrintStream OUT = new PrintStream(System.out, true, StandardCharsets.UTF_8);
 
