@@ -425,8 +425,9 @@ public class ChatClient {
         TerminalUI.println("");
         TerminalUI.println(TerminalUI.BRIGHT_CYAN + "╔════════════════ 📂 " + currentRoomName + " 📂 ════════════════╗"
                 + TerminalUI.RESET);
-        TerminalUI.println(TerminalUI.GRAY + "║ /list • /invite • /sendfile <path> • /sendimage <path> • /delete • /leave ║"
-                + TerminalUI.RESET);
+        TerminalUI.println(
+                TerminalUI.GRAY + "║ /list • /invite • /sendfile <path> • /sendimage <path> • /delete • /leave ║"
+                        + TerminalUI.RESET);
         TerminalUI.println(TerminalUI.BRIGHT_CYAN + "╚════════════════════════════════════════════════════════════╝"
                 + TerminalUI.RESET);
         TerminalUI.println("");
@@ -835,7 +836,8 @@ public class ChatClient {
      * �🔓 Menu: Logout
      */
     private void handleMenuLogout() {
-        // Just mark as not in room, WebSocket disconnect will handle server-side cleanup
+        // Just mark as not in room, WebSocket disconnect will handle server-side
+        // cleanup
         isInRoom = false;
         currentRoomId = null;
 
