@@ -151,6 +151,7 @@ public class TerminalUI {
         String[] commands = {
                 "/help                    - Show this help menu",
                 "/login <username> <pwd>  - Login to chat",
+                "/register <user> <pwd> <name> - Register new user",
                 "/logout                  - Logout",
                 "/rooms                   - List all rooms",
                 "/join <roomId>           - Join a room",

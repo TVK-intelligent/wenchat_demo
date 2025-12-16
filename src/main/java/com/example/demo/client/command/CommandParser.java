@@ -31,11 +31,14 @@ public class CommandParser {
     public enum CommandType {
         HELP,
         LOGIN,
+        REGISTER,
         LOGOUT,
         ROOMS,
         JOIN,
         LEAVE,
         SEND,
+        SENDFILE,
+        SENDIMAGE,
         USERS,
         PRIVATE,
         RECALL,
@@ -82,6 +85,9 @@ public class CommandParser {
             case "/login":
                 type = CommandType.LOGIN;
                 break;
+            case "/register":
+                type = CommandType.REGISTER;
+                break;
             case "/logout":
                 type = CommandType.LOGOUT;
                 break;
@@ -96,6 +102,12 @@ public class CommandParser {
                 break;
             case "/send":
                 type = CommandType.SEND;
+                break;
+            case "/sendfile":
+                type = CommandType.SENDFILE;
+                break;
+            case "/sendimage":
+                type = CommandType.SENDIMAGE;
                 break;
             case "/users":
                 type = CommandType.USERS;
@@ -173,6 +185,8 @@ public class CommandParser {
         switch (cmd.getType()) {
             case LOGIN:
                 return cmd.getArgs().size() >= 2; // username password
+            case REGISTER:
+                return cmd.getArgs().size() >= 3; // username password displayName
             case JOIN:
                 return cmd.getArgs().size() >= 1; // roomId
             case SEND:
@@ -199,6 +213,8 @@ public class CommandParser {
         switch (type) {
             case LOGIN:
                 return "Usage: /login <username> <password>\nExample: /login john mypassword";
+            case REGISTER:
+                return "Usage: /register <username> <password> <displayName>\nExample: /register john mypassword John Doe";
             case ROOMS:
                 return "Usage: /rooms\nShows all available rooms";
             case JOIN:

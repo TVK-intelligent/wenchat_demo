@@ -106,10 +106,13 @@ public class ChatClient {
                     handleMenuLogin();
                     break;
                 case 2:
+                    handleMenuRegister();
+                    break;
+                case 3:
                     TerminalUI.printHelp();
                     MenuUI.waitForContinue();
                     break;
-                case 3:
+                case 4:
                     TerminalUI.println(TerminalUI.GREEN + "\nGoodbye!" + TerminalUI.RESET);
                     System.exit(0);
             }
@@ -117,7 +120,26 @@ public class ChatClient {
     }
 
     /**
-     * 🔐 Menu login
+     * � Menu register
+     */
+    private void handleMenuRegister() {
+        MenuUI.RegisterInfo registerInfo = MenuUI.showRegisterMenu();
+
+        TerminalUI.printInfo("Registering user " + registerInfo.username + "...");
+
+        boolean success = chatService.register(registerInfo.username, registerInfo.password, registerInfo.displayName);
+
+        if (success) {
+            TerminalUI.printSuccess("Registration successful! You can now login.");
+        } else {
+            TerminalUI.printError("Registration failed.");
+        }
+
+        MenuUI.waitForContinue();
+    }
+
+    /**
+     * �🔐 Menu login
      */
     private void handleMenuLogin() {
         MenuUI.LoginInfo loginInfo = MenuUI.showLoginMenu();
@@ -403,7 +425,7 @@ public class ChatClient {
         TerminalUI.println("");
         TerminalUI.println(TerminalUI.BRIGHT_CYAN + "╔════════════════ 📂 " + currentRoomName + " 📂 ════════════════╗"
                 + TerminalUI.RESET);
-        TerminalUI.println(TerminalUI.GRAY + "║ /list • /invite • /leave (hoặc exit/quit)                     ║"
+        TerminalUI.println(TerminalUI.GRAY + "║ /list • /invite • /sendfile <path> • /sendimage <path> • /delete • /leave ║"
                 + TerminalUI.RESET);
         TerminalUI.println(TerminalUI.BRIGHT_CYAN + "╚════════════════════════════════════════════════════════════╝"
                 + TerminalUI.RESET);
@@ -434,7 +456,25 @@ public class ChatClient {
                 handleMenuListUsers();
             } else if (input.equalsIgnoreCase("/invite")) {
                 handleMenuInviteUsers();
-            } else if (!input.isEmpty() && !input.startsWith("/")) {
+            } else if (input.equalsIgnoreCase("/delete")) {
+                handleDeleteRoom();
+            } else if (input.startsWith("/sendfile ")) {
+                String filePath = input.substring("/sendfile ".length()).trim();
+                filePath = filePath.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
+                handleSendFile(filePath, false);
+            } else if (input.startsWith("/sendimage ")) {
+                String filePath = input.substring("/sendimage ".length()).trim();
+                filePath = filePath.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
+                handleSendFile(filePath, true);
+            } else if (input.startsWith("/senfile ")) { // Handle typo
+                String filePath = input.substring("/senfile ".length()).trim();
+                filePath = filePath.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
+                handleSendFile(filePath, false);
+            } else if (input.startsWith("/senimage ")) { // Handle typo
+                String filePath = input.substring("/senimage ".length()).trim();
+                filePath = filePath.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
+                handleSendFile(filePath, true);
+            } else if (!input.trim().isEmpty() && !input.startsWith("/")) {
                 // Send regular message (don't print here, wait for server response)
                 if (currentRoomId != null) {
                     wsClient.sendChatMessage(currentRoomId, input);
@@ -468,6 +508,13 @@ public class ChatClient {
                                 && msg.getSenderId().equals(wsClient.getCurrentUserId());
                         String youMarker = isOwnMessage ? " (You)" : "";
 
+                        String content = msg.getContent();
+                        if (msg.getMessageType() == ChatMessage.MessageType.IMAGE) {
+                            content = "[Image: " + content + "]";
+                        } else if (msg.getMessageType() == ChatMessage.MessageType.FILE) {
+                            content = "[File: " + content + "]";
+                        }
+
                         String displayMsg = String.format(
                                 "%s[%s] %s%s: %s%s",
                                 TerminalUI.BRIGHT_GREEN,
@@ -475,7 +522,7 @@ public class ChatClient {
                                 senderName,
                                 youMarker,
                                 TerminalUI.RESET,
-                                msg.getContent());
+                                content);
                         TerminalUI.println(displayMsg);
                     }
                 }
@@ -484,7 +531,34 @@ public class ChatClient {
     }
 
     /**
-     * 👥 Menu: List users
+     * � Handle sending file/image
+     */
+    private void handleSendFile(String filePath, boolean isImage) {
+        try {
+            if (filePath.isEmpty()) {
+                TerminalUI.printError("Please specify a file path");
+                return;
+            }
+
+            java.io.File file = new java.io.File(filePath);
+            if (!file.exists()) {
+                TerminalUI.printError("File not found: " + filePath);
+                return;
+            }
+
+            TerminalUI.printInfo("Uploading " + (isImage ? "image" : "file") + ": " + file.getName());
+
+            // Upload file via REST API
+            String response = chatService.uploadFile(currentRoomId, filePath);
+            TerminalUI.printSuccess((isImage ? "Image" : "File") + " sent successfully");
+
+        } catch (Exception e) {
+            TerminalUI.printError("Failed to send " + (isImage ? "image" : "file") + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * �👥 Menu: List users
      */
     private void handleMenuListUsers() {
         List<User> users = chatService.getOnlineUsers();
@@ -497,7 +571,9 @@ public class ChatClient {
 
         java.util.List<String> userStrings = new java.util.ArrayList<>();
         for (User user : users) {
-            userStrings.add(user.toString());
+            if (user != null) {
+                userStrings.add(user.toString());
+            }
         }
 
         MenuUI.showListMenu("Online Users", userStrings);
@@ -514,11 +590,11 @@ public class ChatClient {
             return;
         }
 
-        // Get list of online users (friends)
-        List<User> users = chatService.getOnlineUsers();
+        // Get list of all users
+        List<User> users = chatService.getAllUsers();
 
         if (users == null || users.isEmpty()) {
-            TerminalUI.printWarning("No users online to invite");
+            TerminalUI.printWarning("No users available to invite");
             MenuUI.waitForContinue();
             return;
         }
@@ -529,8 +605,9 @@ public class ChatClient {
 
         int index = 1;
         for (User user : users) {
-            if (!user.getId().equals(currentUserId)) { // Don't invite self
-                userStrings.add(String.format("%s (ID: %d)", user.getUsername(), user.getId()));
+            if (user != null && user.getId() != null && !user.getId().equals(currentUserId)) { // Don't invite self
+                String status = user.getStatus() == User.Status.ONLINE ? "🟢" : "⚪";
+                userStrings.add(String.format("%s %s (ID: %d)", status, user.getUsername(), user.getId()));
                 userMap.put(index, user);
                 index++;
             }
@@ -723,29 +800,44 @@ public class ChatClient {
         // Try to leave room
         boolean success = chatService.leaveRoom(currentRoomId);
 
-        // If failed with 400 (owner), ask if they want to delete
-        if (!success) {
-            String response = TerminalUI.getInput("You are the room owner. Delete room instead? (yes/no): ");
-            if (response.equalsIgnoreCase("yes")) {
-                if (chatService.deleteRoom(currentRoomId)) {
-                    isInRoom = false;
-                    currentRoomId = null;
-                }
-            }
-        } else {
-            isInRoom = false;
-            currentRoomId = null;
+        // Always leave locally, even if API fails (e.g., for owners)
+        isInRoom = false;
+        currentRoomId = null;
+        if (success) {
             TerminalUI.printSuccess("Left room");
+        } else {
+            TerminalUI.printInfo("Left room locally");
         }
     }
 
     /**
-     * 🔓 Menu: Logout
+     * �️ Delete room (for room owner)
+     */
+    private void handleDeleteRoom() {
+        if (!isInRoom) {
+            TerminalUI.printWarning("Not in a room");
+            return;
+        }
+
+        String response = TerminalUI.getInput("Are you sure you want to delete this room? (yes/no): ");
+        if (response.equalsIgnoreCase("yes")) {
+            if (chatService.deleteRoom(currentRoomId)) {
+                isInRoom = false;
+                currentRoomId = null;
+                TerminalUI.printSuccess("Room deleted");
+            }
+        } else {
+            TerminalUI.printInfo("Room deletion cancelled");
+        }
+    }
+
+    /**
+     * �🔓 Menu: Logout
      */
     private void handleMenuLogout() {
-        if (isInRoom) {
-            handleMenuLeaveRoom();
-        }
+        // Just mark as not in room, WebSocket disconnect will handle server-side cleanup
+        isInRoom = false;
+        currentRoomId = null;
 
         // 🔴 IMPORTANT: Stop heartbeat thread FIRST to prevent it from sending online
         // status
@@ -1004,7 +1096,7 @@ public class ChatClient {
         }
 
         // Filter out current user
-        searchResults.removeIf(u -> u.getId().equals(currentUserId));
+        searchResults.removeIf(u -> u != null && u.getId() != null && u.getId().equals(currentUserId));
 
         if (searchResults.isEmpty()) {
             TerminalUI.printWarning("No other users found");
@@ -1018,9 +1110,11 @@ public class ChatClient {
 
         int index = 1;
         for (User user : searchResults) {
-            userStrings.add(String.format("[%d] %s", user.getId(), user.getUsername()));
-            userMap.put(index, user);
-            index++;
+            if (user != null && user.getId() != null) {
+                userStrings.add(String.format("[%d] %s", user.getId(), user.getUsername()));
+                userMap.put(index, user);
+                index++;
+            }
         }
 
         int choice = MenuUI.showListMenu("Search Results", userStrings);

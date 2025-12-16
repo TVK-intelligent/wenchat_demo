@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.type.TypeFactory;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -70,7 +72,28 @@ public class ChatService {
     }
 
     /**
-     * 🔓 Logout
+     * � Register new user
+     */
+    public boolean register(String username, String password, String displayName) {
+        try {
+            Map<String, String> registerRequest = new HashMap<>();
+            registerRequest.put("username", username);
+            registerRequest.put("password", password);
+            registerRequest.put("displayName", displayName);
+
+            String response = post("/api/auth/register", objectMapper.writeValueAsString(registerRequest), false);
+            TerminalUI.printSuccess("User registered successfully!");
+            return true;
+
+        } catch (Exception e) {
+            TerminalUI.printError("Registration failed: " + e.getMessage());
+            log.error("Registration error", e);
+            return false;
+        }
+    }
+
+    /**
+     * �🔓 Logout
      */
     public void logout() {
         try {
@@ -119,6 +142,22 @@ public class ChatService {
     public List<User> getOnlineUsers() {
         try {
             String response = get("/api/users/online", true);
+            List<User> users = objectMapper.readValue(response,
+                    TypeFactory.defaultInstance().constructCollectionType(List.class, User.class));
+            return users;
+
+        } catch (Exception e) {
+            TerminalUI.printError("Failed to fetch users: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 👥 Get all users
+     */
+    public List<User> getAllUsers() {
+        try {
+            String response = get("/api/users", true);
             List<User> users = objectMapper.readValue(response,
                     TypeFactory.defaultInstance().constructCollectionType(List.class, User.class));
             return users;
@@ -465,6 +504,64 @@ public class ChatService {
             }
         }
         return response.toString();
+    }
+
+    /**
+     * 📎 Upload file for message
+     */
+    public String uploadFile(Long roomId, String filePath) throws Exception {
+        File file = new File(filePath);
+        if (!file.exists()) {
+            throw new Exception("File not found: " + filePath);
+        }
+
+        String boundary = "----FormBoundary" + System.currentTimeMillis();
+        URL url = new URL(baseUrl + "/api/messages/upload?roomId=" + roomId);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        conn.setDoOutput(true);
+
+        if (jwtToken != null) {
+            conn.setRequestProperty("Authorization", "Bearer " + jwtToken);
+        }
+
+        try (OutputStream os = conn.getOutputStream()) {
+            // Write file data
+            String header = "--" + boundary + "\r\n" +
+                    "Content-Disposition: form-data; name=\"file\"; filename=\"" + file.getName() + "\"\r\n" +
+                    "Content-Type: application/octet-stream\r\n\r\n";
+
+            os.write(header.getBytes(StandardCharsets.UTF_8));
+
+            try (FileInputStream fis = new FileInputStream(file)) {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = fis.read(buffer)) != -1) {
+                    os.write(buffer, 0, bytesRead);
+                }
+            }
+
+            os.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+            os.flush();
+        }
+
+        int responseCode = conn.getResponseCode();
+        if (responseCode != 200 && responseCode != 201) {
+            String errorMsg = "HTTP " + responseCode;
+            try {
+                InputStream errorStream = conn.getErrorStream();
+                if (errorStream != null) {
+                    errorMsg += " - " + readResponse(errorStream);
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+            throw new Exception(errorMsg);
+        }
+
+        return readResponse(conn.getInputStream());
     }
 
     /**

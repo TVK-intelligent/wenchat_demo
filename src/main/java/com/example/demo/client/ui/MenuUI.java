@@ -18,11 +18,12 @@ public class MenuUI {
         TerminalUI.println("");
 
         TerminalUI.println(TerminalUI.GREEN + "  1. Login" + TerminalUI.RESET);
-        TerminalUI.println(TerminalUI.GREEN + "  2. View Help" + TerminalUI.RESET);
-        TerminalUI.println(TerminalUI.GREEN + "  3. Exit" + TerminalUI.RESET);
+        TerminalUI.println(TerminalUI.GREEN + "  2. Register" + TerminalUI.RESET);
+        TerminalUI.println(TerminalUI.GREEN + "  3. View Help" + TerminalUI.RESET);
+        TerminalUI.println(TerminalUI.GREEN + "  4. Exit" + TerminalUI.RESET);
         TerminalUI.println("");
 
-        return getMenuChoice(1, 3);
+        return getMenuChoice(1, 4);
     }
 
     /**
@@ -38,6 +39,22 @@ public class MenuUI {
         String password = TerminalUI.getPassword("Password: ");
 
         return new LoginInfo(username, password);
+    }
+
+    /**
+     * Register menu
+     */
+    public static RegisterInfo showRegisterMenu() {
+        TerminalUI.println("");
+        TerminalUI.println(
+                TerminalUI.BRIGHT_CYAN + "+--------- REGISTER ---------+" + TerminalUI.RESET);
+        TerminalUI.println("");
+
+        String username = TerminalUI.getInput("Username: ");
+        String password = TerminalUI.getPassword("Password: ");
+        String displayName = TerminalUI.getInput("Display Name: ");
+
+        return new RegisterInfo(username, password, displayName);
     }
 
     /**
@@ -223,6 +240,21 @@ public class MenuUI {
         public LoginInfo(String username, String password) {
             this.username = username;
             this.password = password;
+        }
+    }
+
+    /**
+     * 📝 Register Info DTO
+     */
+    public static class RegisterInfo {
+        public String username;
+        public String password;
+        public String displayName;
+
+        public RegisterInfo(String username, String password, String displayName) {
+            this.username = username;
+            this.password = password;
+            this.displayName = displayName;
         }
     }
 }
