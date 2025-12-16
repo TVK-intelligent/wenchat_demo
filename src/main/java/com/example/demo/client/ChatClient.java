@@ -482,6 +482,10 @@ public class ChatClient {
                 String filename = input.substring("/download ".length()).trim();
                 filename = filename.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
                 handleDownloadFile(filename);
+            } else if (input.startsWith("/dowload ")) { // Handle typo
+                String filename = input.substring("/dowload ".length()).trim();
+                filename = filename.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
+                handleDownloadFile(filename);
             } else if (!input.trim().isEmpty() && !input.startsWith("/")) {
                 // Send regular message (don't print here, wait for server response)
                 if (currentRoomId != null) {
@@ -629,7 +633,13 @@ public class ChatClient {
             TerminalUI.printInfo("Downloading file: " + filename + "...");
 
             // Construct download URL
-            String downloadUrl = ServerConfig.getServerUrl() + "/api/messages/download/file/" + filename;
+            String downloadPath;
+            if (filename.startsWith("/uploads/")) {
+                downloadPath = filename;
+            } else {
+                downloadPath = "/uploads/file/" + filename;
+            }
+            String downloadUrl = ServerConfig.getServerUrl() + "/api/messages/download" + downloadPath;
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(downloadUrl)
                     .openConnection();
             conn.setRequestMethod("GET");
@@ -643,9 +653,15 @@ public class ChatClient {
             int responseCode = conn.getResponseCode();
             if (responseCode == 200) {
                 // Read response and save file
-                java.io.InputStream inputStream = conn.getInputStream();
-                java.io.FileOutputStream outputStream = new java.io.FileOutputStream(filename);
+                // Create downloads directory if not exists
+                String downloadsPath = System.getProperty("user.home") + "/Downloads";
+                java.io.File downloadsDir = new java.io.File(downloadsPath);
+                if (!downloadsDir.exists()) {
+                    downloadsDir.mkdirs();
+                }
 
+                java.io.InputStream inputStream = conn.getInputStream();
+                java.io.FileOutputStream outputStream = new java.io.FileOutputStream(downloadsPath + "/" + filename);
                 byte[] buffer = new byte[4096];
                 int bytesRead;
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
@@ -655,7 +671,7 @@ public class ChatClient {
                 outputStream.close();
                 inputStream.close();
 
-                TerminalUI.printSuccess("File downloaded successfully: " + filename);
+                TerminalUI.printSuccess("File downloaded successfully: " + downloadsPath + "/" + filename);
             } else {
                 TerminalUI.printError("Failed to download file. Response code: " + responseCode);
             }
