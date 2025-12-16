@@ -426,7 +426,8 @@ public class ChatClient {
         TerminalUI.println(TerminalUI.BRIGHT_CYAN + "╔════════════════ 📂 " + currentRoomName + " 📂 ════════════════╗"
                 + TerminalUI.RESET);
         TerminalUI.println(
-                TerminalUI.GRAY + "║ /list • /invite • /sendfile <path> • /sendimage <path> • /download <file> • /export • /delete • /leave ║"
+                TerminalUI.GRAY
+                        + "║ /list • /invite • /sendfile <path> • /sendimage <path> • /download <file> • /export • /delete • /leave ║"
                         + TerminalUI.RESET);
         TerminalUI.println(TerminalUI.BRIGHT_CYAN + "╚════════════════════════════════════════════════════════════╝"
                 + TerminalUI.RESET);
@@ -591,7 +592,8 @@ public class ChatClient {
             if (responseCode == 200) {
                 // Read response
                 java.io.InputStream inputStream = conn.getInputStream();
-                java.io.FileOutputStream outputStream = new java.io.FileOutputStream("chat_export_room_" + currentRoomId + ".txt");
+                java.io.FileOutputStream outputStream = new java.io.FileOutputStream(
+                        "chat_export_room_" + currentRoomId + ".txt");
 
                 byte[] buffer = new byte[4096];
                 int bytesRead;
@@ -628,7 +630,8 @@ public class ChatClient {
 
             // Construct download URL
             String downloadUrl = ServerConfig.getServerUrl() + "/api/messages/download/file/" + filename;
-            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(downloadUrl).openConnection();
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(downloadUrl)
+                    .openConnection();
             conn.setRequestMethod("GET");
 
             // Add authentication header
