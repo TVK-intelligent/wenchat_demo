@@ -46,7 +46,14 @@ public class ChatService {
     }
 
     /**
-     * 🔐 Login user
+     * � Get JWT token for authentication
+     */
+    public String getJwtToken() {
+        return this.jwtToken;
+    }
+
+    /**
+     * �🔐 Login user
      */
     public LoginResponse login(String username, String password) {
         try {

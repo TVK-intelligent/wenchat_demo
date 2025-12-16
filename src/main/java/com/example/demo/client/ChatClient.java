@@ -426,7 +426,7 @@ public class ChatClient {
         TerminalUI.println(TerminalUI.BRIGHT_CYAN + "╔════════════════ 📂 " + currentRoomName + " 📂 ════════════════╗"
                 + TerminalUI.RESET);
         TerminalUI.println(
-                TerminalUI.GRAY + "║ /list • /invite • /sendfile <path> • /sendimage <path> • /delete • /leave ║"
+                TerminalUI.GRAY + "║ /list • /invite • /sendfile <path> • /sendimage <path> • /download <file> • /export • /delete • /leave ║"
                         + TerminalUI.RESET);
         TerminalUI.println(TerminalUI.BRIGHT_CYAN + "╚════════════════════════════════════════════════════════════╝"
                 + TerminalUI.RESET);
@@ -475,6 +475,12 @@ public class ChatClient {
                 String filePath = input.substring("/senimage ".length()).trim();
                 filePath = filePath.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
                 handleSendFile(filePath, true);
+            } else if (input.equalsIgnoreCase("/export")) {
+                handleExportChat();
+            } else if (input.startsWith("/download ")) {
+                String filename = input.substring("/download ".length()).trim();
+                filename = filename.replaceAll("^\"|\"$", ""); // Remove surrounding quotes
+                handleDownloadFile(filename);
             } else if (!input.trim().isEmpty() && !input.startsWith("/")) {
                 // Send regular message (don't print here, wait for server response)
                 if (currentRoomId != null) {
@@ -555,6 +561,106 @@ public class ChatClient {
 
         } catch (Exception e) {
             TerminalUI.printError("Failed to send " + (isImage ? "image" : "file") + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * 📄 Export chat history to file
+     */
+    private void handleExportChat() {
+        try {
+            if (currentRoomId == null) {
+                TerminalUI.printWarning("Not in a room. Use /join <roomId> first.");
+                return;
+            }
+
+            TerminalUI.printInfo("Exporting chat history for room " + currentRoomId + "...");
+
+            // Call export API
+            String exportUrl = ServerConfig.getServerUrl() + "/api/messages/export/" + currentRoomId;
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(exportUrl).openConnection();
+            conn.setRequestMethod("GET");
+
+            // Add authentication header
+            String authToken = chatService.getJwtToken();
+            if (authToken != null) {
+                conn.setRequestProperty("Authorization", "Bearer " + authToken);
+            }
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode == 200) {
+                // Read response
+                java.io.InputStream inputStream = conn.getInputStream();
+                java.io.FileOutputStream outputStream = new java.io.FileOutputStream("chat_export_room_" + currentRoomId + ".txt");
+
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                outputStream.close();
+                inputStream.close();
+
+                TerminalUI.printSuccess("Chat history exported to: chat_export_room_" + currentRoomId + ".txt");
+            } else {
+                TerminalUI.printError("Failed to export chat history. Response code: " + responseCode);
+            }
+
+            conn.disconnect();
+
+        } catch (Exception e) {
+            TerminalUI.printError("Failed to export chat history: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 📥 Download file by filename
+     */
+    private void handleDownloadFile(String filename) {
+        try {
+            if (filename == null || filename.trim().isEmpty()) {
+                TerminalUI.printWarning("Please provide a filename. Usage: /download <filename>");
+                return;
+            }
+
+            TerminalUI.printInfo("Downloading file: " + filename + "...");
+
+            // Construct download URL
+            String downloadUrl = ServerConfig.getServerUrl() + "/api/messages/download/file/" + filename;
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(downloadUrl).openConnection();
+            conn.setRequestMethod("GET");
+
+            // Add authentication header
+            String authToken = chatService.getJwtToken();
+            if (authToken != null) {
+                conn.setRequestProperty("Authorization", "Bearer " + authToken);
+            }
+
+            int responseCode = conn.getResponseCode();
+            if (responseCode == 200) {
+                // Read response and save file
+                java.io.InputStream inputStream = conn.getInputStream();
+                java.io.FileOutputStream outputStream = new java.io.FileOutputStream(filename);
+
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                outputStream.close();
+                inputStream.close();
+
+                TerminalUI.printSuccess("File downloaded successfully: " + filename);
+            } else {
+                TerminalUI.printError("Failed to download file. Response code: " + responseCode);
+            }
+
+            conn.disconnect();
+
+        } catch (Exception e) {
+            TerminalUI.printError("Failed to download file: " + e.getMessage());
         }
     }
 
