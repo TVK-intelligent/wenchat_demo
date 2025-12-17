@@ -1,0 +1,555 @@
+/* ============================================
+   WenChat Modern UI Styles
+   ============================================ */
+
+/* ============================================
+   CSS Variables - Theme System
+   ============================================ */
+.root {
+    /* Colors - Light Theme (default) */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-tertiary: #e9ecef;
+    --bg-chat: #f0f2f5;
+    --bg-sidebar: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+    --bg-sidebar-hover: rgba(255,255,255,0.15);
+    --bg-sidebar-active: rgba(255,255,255,0.25);
+    
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --text-muted: #adb5bd;
+    --text-on-primary: #ffffff;
+    
+    --border-color: #e9ecef;
+    --border-light: rgba(255,255,255,0.2);
+    
+    --accent-primary: #667eea;
+    --accent-secondary: #764ba2;
+    --accent-success: #28a745;
+    --accent-danger: #dc3545;
+    --accent-warning: #ffc107;
+    
+    --message-mine: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --message-others: #ffffff;
+    
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-full: 50px;
+    
+    -fx-font-family: 'Segoe UI', 'SF Pro Display', -apple-system, sans-serif;
+    -fx-font-size: 14px;
+}
+
+/* ============================================
+   Dark Theme
+   ============================================ */
+.dark-theme {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-chat: #1a1a2e;
+    --bg-sidebar: linear-gradient(180deg, #16213e 0%, #1a1a2e 100%);
+    --bg-sidebar-hover: rgba(255,255,255,0.08);
+    --bg-sidebar-active: rgba(255,255,255,0.15);
+    
+    --text-primary: #e4e6eb;
+    --text-secondary: #b0b3b8;
+    --text-muted: #8a8d91;
+    
+    --border-color: #3a3a5c;
+    --border-light: rgba(255,255,255,0.1);
+    
+    --message-mine: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --message-others: #2d2d44;
+    
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* ============================================
+   SIDEBAR STYLES
+   ============================================ */
+.sidebar {
+    -fx-background-color: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+    -fx-padding: 20 15 20 15;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 2, 0);
+}
+
+.dark-theme .sidebar {
+    -fx-background-color: linear-gradient(180deg, #16213e 0%, #1a1a2e 100%);
+}
+
+/* Sidebar Header */
+.sidebar-header {
+    -fx-padding: 0 0 20 0;
+    -fx-border-color: rgba(255,255,255,0.1);
+    -fx-border-width: 0 0 1 0;
+}
+
+.sidebar-header-label {
+    -fx-text-fill: white;
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 2, 0, 0, 1);
+}
+
+.sidebar-status-label {
+    -fx-text-fill: rgba(255,255,255,0.8);
+    -fx-font-size: 12px;
+}
+
+/* Sidebar Navigation Buttons */
+.sidebar-button {
+    -fx-background-color: rgba(255,255,255,0.18);
+    -fx-border-color: rgba(255,255,255,0.35);
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+    -fx-border-width: 1.5;
+    -fx-cursor: hand;
+    -fx-padding: 14 18 14 18;
+    -fx-alignment: center-left;
+    -fx-effect: dropshadow(gaussian, rgba(255,255,255,0.15), 8, 0, 0, 2);
+}
+
+.sidebar-button:hover {
+    -fx-background-color: rgba(255,255,255,0.35);
+    -fx-border-color: rgba(255,255,255,0.5);
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+    -fx-effect: dropshadow(gaussian, rgba(255,255,255,0.25), 12, 0, 0, 2);
+}
+
+.sidebar-button:pressed {
+    -fx-background-color: rgba(255,255,255,0.4);
+    -fx-scale-x: 0.98;
+    -fx-scale-y: 0.98;
+}
+
+/* Sidebar Section Labels */
+.sidebar-section-label {
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-padding: 15 0 8 5;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 2, 0, 0, 1);
+}
+
+.sidebar-section-divider {
+    -fx-border-color: rgba(255,255,255,0.25);
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 10 0 0 0;
+}
+
+/* Sidebar ComboBox */
+.sidebar-combo-box {
+    -fx-background-color: rgba(255,255,255,0.25);
+    -fx-border-color: rgba(255,255,255,0.4);
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+    -fx-border-width: 1.5;
+    -fx-padding: 8;
+    -fx-font-weight: bold;
+}
+
+.sidebar-combo-box .list-cell {
+    -fx-text-fill: white;
+    -fx-background-color: transparent;
+    -fx-font-weight: bold;
+}
+
+.sidebar-combo-box .combo-box-popup .list-view {
+    -fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 15, 0, 0, 5);
+}
+
+.sidebar-combo-box .combo-box-popup .list-cell:hover {
+    -fx-background-color: rgba(255,255,255,0.35);
+}
+
+/* Sidebar User List */
+.sidebar-list-view {
+    -fx-background-color: rgba(255,255,255,0.15);
+    -fx-border-color: rgba(255,255,255,0.25);
+    -fx-border-radius: 14;
+    -fx-background-radius: 14;
+    -fx-border-width: 1;
+    -fx-padding: 8;
+    -fx-effect: innershadow(gaussian, rgba(255,255,255,0.1), 5, 0, 0, 2);
+}
+
+.sidebar-list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: white;
+    -fx-padding: 5 8 5 8;
+    -fx-background-radius: 10;
+    -fx-font-weight: normal;
+}
+
+.sidebar-list-view .list-cell:filled:hover {
+    -fx-background-color: rgba(255,255,255,0.22);
+    -fx-effect: dropshadow(gaussian, rgba(255,255,255,0.1), 5, 0, 0, 1);
+}
+
+.sidebar-list-view .list-cell:filled:selected {
+    -fx-background-color: rgba(255,255,255,0.32);
+    -fx-effect: dropshadow(gaussian, rgba(255,255,255,0.15), 8, 0, 0, 2);
+}
+
+.sidebar-list-view .scroll-bar:vertical {
+    -fx-background-color: transparent;
+}
+
+.sidebar-list-view .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(255,255,255,0.45);
+    -fx-background-radius: 6px;
+}
+
+/* ============================================
+   CONTENT AREA STYLES
+   ============================================ */
+
+/* Content Header */
+.content-area-header {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e9ecef;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 15 25 15 25;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 4, 0, 0, 2);
+}
+
+.dark-theme .content-area-header {
+    -fx-background-color: #1a1a2e;
+    -fx-border-color: #3a3a5c;
+}
+
+.content-header-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #212529;
+}
+
+.dark-theme .content-header-title {
+    -fx-text-fill: #e4e6eb;
+}
+
+.content-header-status {
+    -fx-font-size: 12px;
+    -fx-text-fill: #28a745;
+    -fx-font-weight: bold;
+}
+
+/* Chat Container */
+.chat-container {
+    -fx-background-color: #f0f2f5;
+}
+
+.dark-theme .chat-container {
+    -fx-background-color: #1a1a2e;
+}
+
+/* Chat ListView */
+.chat-list-view {
+    -fx-background-color: transparent;
+    -fx-padding: 15 20 15 20;
+}
+
+.chat-list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 4 0 4 0;
+}
+
+.chat-list-view .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8px;
+}
+
+.chat-list-view .scroll-bar:vertical .track {
+    -fx-background-color: transparent;
+}
+
+.chat-list-view .scroll-bar:vertical .thumb {
+    -fx-background-color: #c4c4c4;
+    -fx-background-radius: 4px;
+}
+
+.dark-theme .chat-list-view .scroll-bar:vertical .thumb {
+    -fx-background-color: #4a4a6a;
+}
+
+/* ============================================
+   MESSAGE STYLES
+   ============================================ */
+
+/* Message Container */
+.message-container {
+    -fx-padding: 2 0 2 0;
+}
+
+/* Message Bubble */
+.message-bubble {
+    -fx-padding: 12 16 12 16;
+    -fx-background-radius: 18;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 4, 0, 0, 1);
+}
+
+.message-bubble.mine {
+    -fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -fx-background-radius: 18 18 4 18;
+}
+
+.message-bubble.others {
+    -fx-background-color: #ffffff;
+    -fx-background-radius: 18 18 18 4;
+    -fx-border-color: #e9ecef;
+    -fx-border-width: 1;
+    -fx-border-radius: 18 18 18 4;
+}
+
+.dark-theme .message-bubble.others {
+    -fx-background-color: #2d2d44;
+    -fx-border-color: #3a3a5c;
+}
+
+/* Message Text */
+.message-text {
+    -fx-font-size: 14px;
+    -fx-wrap-text: true;
+}
+
+.message-text.mine {
+    -fx-text-fill: white;
+}
+
+.message-text.others {
+    -fx-text-fill: #212529;
+}
+
+.dark-theme .message-text.others {
+    -fx-text-fill: #e4e6eb;
+}
+
+/* Message Sender Name */
+.message-sender {
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+    -fx-text-fill: #6c757d;
+    -fx-padding: 0 0 4 8;
+}
+
+.dark-theme .message-sender {
+    -fx-text-fill: #b0b3b8;
+}
+
+/* Message Time */
+.message-time {
+    -fx-font-size: 10px;
+    -fx-padding: 4 0 0 0;
+}
+
+.message-time.mine {
+    -fx-text-fill: rgba(255,255,255,0.7);
+}
+
+.message-time.others {
+    -fx-text-fill: #adb5bd;
+}
+
+/* Avatar Styles */
+.message-avatar {
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 3, 0, 0, 1);
+}
+
+.avatar-initial {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-font-size: 11px;
+}
+
+/* ============================================
+   INPUT AREA STYLES
+   ============================================ */
+.content-area-input-box {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #e9ecef;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 15 20 15 20;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 4, 0, 0, -2);
+}
+
+.dark-theme .content-area-input-box {
+    -fx-background-color: #1a1a2e;
+    -fx-border-color: #3a3a5c;
+}
+
+.chat-input-field {
+    -fx-background-color: #f0f2f5;
+    -fx-border-color: #dee2e6;
+    -fx-border-radius: 25;
+    -fx-background-radius: 25;
+    -fx-padding: 12 20 12 20;
+    -fx-font-size: 14px;
+    -fx-prompt-text-fill: #adb5bd;
+}
+
+.chat-input-field:focused {
+    -fx-border-color: #667eea;
+    -fx-background-color: #ffffff;
+    -fx-effect: dropshadow(gaussian, rgba(102,126,234,0.2), 6, 0, 0, 0);
+}
+
+.dark-theme .chat-input-field {
+    -fx-background-color: #2d2d44;
+    -fx-border-color: #3a3a5c;
+    -fx-text-fill: #e4e6eb;
+    -fx-prompt-text-fill: #8a8d91;
+}
+
+.dark-theme .chat-input-field:focused {
+    -fx-background-color: #363654;
+    -fx-border-color: #667eea;
+    -fx-effect: dropshadow(gaussian, rgba(102,126,234,0.3), 8, 0, 0, 0);
+}
+
+/* Send Button */
+.send-button {
+    -fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-border-radius: 25;
+    -fx-background-radius: 25;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-padding: 10 20 10 20;
+    -fx-effect: dropshadow(gaussian, rgba(102,126,234,0.3), 6, 0, 0, 2);
+}
+
+.send-button:hover {
+    -fx-background-color: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+    -fx-scale-x: 1.03;
+    -fx-scale-y: 1.03;
+}
+
+.send-button:pressed {
+    -fx-scale-x: 0.97;
+    -fx-scale-y: 0.97;
+}
+
+/* File Button */
+.file-button {
+    -fx-background-color: #f0f2f5;
+    -fx-text-fill: #667eea;
+    -fx-font-weight: bold;
+    -fx-border-color: #667eea;
+    -fx-border-width: 2;
+    -fx-border-radius: 25;
+    -fx-background-radius: 25;
+    -fx-cursor: hand;
+    -fx-font-size: 13px;
+    -fx-padding: 8 15 8 15;
+}
+
+.file-button:hover {
+    -fx-background-color: #667eea;
+    -fx-text-fill: white;
+    -fx-scale-x: 1.03;
+    -fx-scale-y: 1.03;
+}
+
+.dark-theme .file-button {
+    -fx-background-color: #2d2d44;
+    -fx-border-color: #667eea;
+    -fx-text-fill: #667eea;
+}
+
+.dark-theme .file-button:hover {
+    -fx-background-color: #667eea;
+    -fx-text-fill: white;
+}
+
+/* Emoji button */
+.emoji-button {
+    -fx-background-color: transparent;
+    -fx-font-size: 18px;
+    -fx-cursor: hand;
+    -fx-padding: 5;
+}
+
+.emoji-button:hover {
+    -fx-background-color: #f0f2f5;
+    -fx-background-radius: 50;
+}
+
+.dark-theme .emoji-button:hover {
+    -fx-background-color: #2d2d44;
+}
+
+/* ============================================
+   DIALOG STYLES
+   ============================================ */
+.dialog-pane {
+    -fx-background-color: #ffffff;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+}
+
+.dark-theme .dialog-pane {
+    -fx-background-color: #1a1a2e;
+}
+
+.dialog-pane .header-panel {
+    -fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -fx-padding: 20;
+}
+
+.dialog-pane .header-panel .label {
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+.text-primary {
+    -fx-text-fill: #212529;
+}
+
+.dark-theme .text-primary {
+    -fx-text-fill: #e4e6eb;
+}
+
+.text-secondary {
+    -fx-text-fill: #6c757d;
+}
+
+.text-success {
+    -fx-text-fill: #28a745;
+}
+
+.text-danger {
+    -fx-text-fill: #dc3545;
+}
+
+.bg-transparent {
+    -fx-background-color: transparent;
+}
+
+/* ============================================
+   ANIMATIONS (handled in Java but styled here)
+   ============================================ */
+.fade-in {
+    -fx-opacity: 1;
+}
+
+.slide-up {
+    -fx-translate-y: 0;
+}

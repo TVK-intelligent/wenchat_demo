@@ -16,11 +16,14 @@
     <artifactId>demo</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>demo</name>
-    <description>WebChat Group 10 CLI Client</description>
+    <description>WebChat Group 10 Desktop Client</description>
 
     <properties>
         <java.version>21</java.version>
         <lombok.version>1.18.30</lombok.version>
+        <javafx.version>21.0.2</javafx.version>
+        <javafx.modules.path>${maven.repo.path}/org/openjfx/javafx-controls/${javafx.version}/javafx-controls-${javafx.version}.jar;${maven.repo.path}/org/openjfx/javafx-fxml/${javafx.version}/javafx-fxml-${javafx.version}.jar;${maven.repo.path}/org/openjfx/javafx-graphics/${javafx.version}/javafx-graphics-${javafx.version}.jar;${maven.repo.path}/org/openjfx/javafx-base/${javafx.version}/javafx-base-${javafx.version}.jar</javafx.modules.path>
+        <maven.repo.path>${settings.localRepository}</maven.repo.path>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
@@ -97,6 +100,39 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- JavaFX Dependencies -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- Atlantafx - Modern JavaFX Theme -->
+        <dependency>
+            <groupId>io.github.mkpaz</groupId>
+            <artifactId>atlantafx-base</artifactId>
+            <version>2.0.1</version>
+        </dependency>
+
+        <!-- ControlsFX - Additional JavaFX Controls -->
+        <dependency>
+            <groupId>org.controlsfx</groupId>
+            <artifactId>controlsfx</artifactId>
+            <version>11.1.2</version>
+        </dependency>
+
+        <!-- FontAwesomeFX - Icon Library -->
+        <dependency>
+            <groupId>de.jensd</groupId>
+            <artifactId>fontawesomefx-fontawesome</artifactId>
+            <version>4.7.0-9.1.2</version>
+        </dependency>
+
     </dependencies>
 
     <build>
@@ -109,6 +145,9 @@
                 <configuration>
                     <release>${java.version}</release>
                     <encoding>UTF-8</encoding>
+                    <excludes>
+                        <exclude>**/client/ChatClient.java</exclude>
+                    </excludes>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -119,13 +158,19 @@
                 </configuration>
             </plugin>
 
-            <!-- Exec Plugin for CLI Client -->
+            <!-- Exec Plugin for Desktop Client -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.0.0</version>
                 <configuration>
-                    <mainClass>com.example.demo.ChatClientApp</mainClass>
+                    <mainClass>com.example.demo.ChatClientFXApp</mainClass>
+                    <arguments>
+                        <argument>--module-path</argument>
+                        <argument>${javafx.modules.path}</argument>
+                        <argument>--add-modules</argument>
+                        <argument>javafx.controls,javafx.fxml,atlantafx.base,org.controlsfx.controls</argument>
+                    </arguments>
                 </configuration>
             </plugin>
 
@@ -140,7 +185,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>com.example.demo.ChatClientApp</mainClass>
+                            <mainClass>com.example.demo.ChatClientFXApp</mainClass>
                         </manifest>
                     </archive>
                     <finalName>webchat-g10-client</finalName>

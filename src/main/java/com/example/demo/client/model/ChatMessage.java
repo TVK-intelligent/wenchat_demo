@@ -22,6 +22,7 @@ public class ChatMessage {
     private String senderUsername;
     private String senderDisplayName;
     private String content;
+    private String fileName;
     private MessageType messageType;
     private LocalDateTime timestamp;
     private boolean recalled;

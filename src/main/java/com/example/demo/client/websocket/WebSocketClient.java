@@ -1,17 +1,20 @@
-
 package com.example.demo.client.websocket;
 
 import com.example.demo.client.config.ServerConfig;
 import com.example.demo.client.model.ChatMessage;
 import com.example.demo.client.model.TypingIndicator;
 import com.example.demo.client.model.UserStatusMessage;
-import com.example.demo.client.ui.TerminalUI;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.messaging.converter.MappingJackson2MessageConverter;
-import org.springframework.messaging.simp.stomp.*;
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
+import org.springframework.messaging.simp.stomp.StompCommand;
+import org.springframework.messaging.simp.stomp.StompFrameHandler;
+import org.springframework.messaging.simp.stomp.StompHeaders;
+import org.springframework.messaging.simp.stomp.StompSession;
+import org.springframework.messaging.simp.stomp.StompSessionHandler;
 import org.springframework.web.socket.WebSocketHttpHeaders;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.messaging.WebSocketStompClient;
@@ -26,12 +29,17 @@ import java.util.function.Consumer;
 
 /**
  * 🔌 WebSocketClient - Spring STOMP client for WebSocket communication
+ * (Fixed & Optimized)
  */
 @Slf4j
 public class WebSocketClient {
     private final String serverUrl;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final Map<String, String> subscriptionIds = new ConcurrentHashMap<>();
+
+    // ✅ FIX 1: Dùng StompSession.Subscription thay vì StompSubscription (không tồn
+    // tại)
+    private final Map<String, StompSession.Subscription> subscriptionIds = new ConcurrentHashMap<>();
+
     private final BlockingQueue<ChatMessage> messageQueue = new LinkedBlockingQueue<>();
 
     private WebSocketStompClient stompClient;
@@ -44,11 +52,8 @@ public class WebSocketClient {
 
     public WebSocketClient(String serverUrl) {
         this.serverUrl = serverUrl;
-        // Register Java 8 date/time module
         objectMapper.registerModule(new JavaTimeModule());
-        // Write dates as ISO-8601 strings instead of arrays
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        // Ignore unknown fields during deserialization
         objectMapper.configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     }
 
@@ -59,26 +64,19 @@ public class WebSocketClient {
         this.jwtToken = token;
         this.connectionLatch = new CountDownLatch(1);
 
-        // Use SockJS with WebSocket transport
         List<Transport> transports = new ArrayList<>();
         transports.add(new WebSocketTransport(new StandardWebSocketClient()));
         SockJsClient sockJsClient = new SockJsClient(transports);
 
         this.stompClient = new WebSocketStompClient(sockJsClient);
 
-        // Không set converter - để Spring tự chọn converter mặc định
-        // Handlers sẽ nhận byte[] thô và convert bằng ObjectMapper
-
         WebSocketHttpHeaders headers = new WebSocketHttpHeaders();
         headers.add("Authorization", "Bearer " + token);
 
-        // Dùng ServerConfig để get WS URL (đảm bảo luôn lấy URL mới nhất)
         String wsUrl = ServerConfig.getWsUrl();
-
-        // Add token as query parameter (for ngrok compatibility)
         wsUrl += "?token=" + token;
 
-        TerminalUI.printInfo("Connecting to " + wsUrl.split("\\?")[0] + "...");
+        log.info("Connecting to " + wsUrl.split("\\?")[0] + "...");
 
         try {
             StompSessionHandler handler = new MySessionHandler(this.connectionLatch);
@@ -86,9 +84,8 @@ public class WebSocketClient {
 
             if (connectionLatch.await(5, TimeUnit.SECONDS)) {
                 this.connected = true;
-                TerminalUI.printSuccess("Connected to WebSocket!");
+                log.info("Connected to WebSocket!");
 
-                // Send user ID to backend to register this session
                 if (currentUserId != null) {
                     try {
                         stompSession.send("/app/register-session", currentUserId.toString());
@@ -97,11 +94,35 @@ public class WebSocketClient {
                     }
                 }
             } else {
-                TerminalUI.printError("Connection timeout");
+                log.error("Connection timeout");
             }
         } catch (Exception e) {
-            TerminalUI.printError("WebSocket connection failed: " + e.getMessage());
+            log.error("WebSocket connection failed: " + e.getMessage());
             throw e;
+        }
+    }
+
+    /**
+     * ♻️ HELPER: Hàm chung để parse dữ liệu (giúp code gọn hơn, tránh lặp lại)
+     */
+    private <T> T parsePayload(Object payload, Class<T> targetClass) {
+        try {
+            if (payload == null)
+                return null;
+            if (targetClass.isInstance(payload)) {
+                return targetClass.cast(payload);
+            }
+            if (payload instanceof String) {
+                return objectMapper.readValue((String) payload, targetClass);
+            }
+            if (payload instanceof byte[]) {
+                String json = new String((byte[]) payload, java.nio.charset.StandardCharsets.UTF_8);
+                return objectMapper.readValue(json, targetClass);
+            }
+            return objectMapper.convertValue(payload, targetClass);
+        } catch (Exception e) {
+            log.error("❌ Parse error for {}: {}", targetClass.getSimpleName(), e.getMessage());
+            return null;
         }
     }
 
@@ -109,129 +130,152 @@ public class WebSocketClient {
      * 📨 Subscribe to chat room messages
      */
     public void subscribeToRoom(Long roomId, Consumer<ChatMessage> callback) {
-        if (stompSession == null || !connected) {
-            TerminalUI.printError("Not connected to WebSocket");
+        if (stompSession == null || !connected)
             return;
-        }
 
         String destination = "/topic/room/" + roomId;
         String id = "room-" + roomId;
 
+        if (subscriptionIds.containsKey(id))
+            return;
+
         try {
-            stompSession.subscribe(destination, new StompFrameHandler() {
+            // ✅ FIX: StompSession.Subscription
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
                 @Override
-                public Type getPayloadType(StompHeaders headers) {
-                    // Không có converter - Spring truyền byte[] thô
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
                     return byte[].class;
                 }
 
                 @Override
-                public void handleFrame(StompHeaders headers, Object payload) {
-                    try {
-                        ChatMessage msg = null;
-
-                        if (payload == null) {
-                            log.warn("Null payload received for room {}", roomId);
-                            return;
-                        }
-
-                        if (payload instanceof String) {
-                            String json = (String) payload;
-                            msg = objectMapper.readValue(json, ChatMessage.class);
-                        } else if (payload instanceof ChatMessage) {
-                            msg = (ChatMessage) payload;
-                        } else if (payload instanceof byte[]) {
-                            String json = new String((byte[]) payload, java.nio.charset.StandardCharsets.UTF_8);
-                            msg = objectMapper.readValue(json, ChatMessage.class);
-                        } else {
-                            log.debug("Unknown payload type: {}, attempting conversion",
-                                    payload.getClass().getSimpleName());
-                            msg = objectMapper.convertValue(payload, ChatMessage.class);
-                        }
-
-                        if (msg != null) {
-                            callback.accept(msg);
-                            messageQueue.offer(msg);
-                        }
-                    } catch (Exception e) {
-                        log.error("Error processing message: {} (payload type: {})",
-                                e.getMessage(),
-                                payload != null ? payload.getClass().getSimpleName() : "null");
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    ChatMessage msg = parsePayload(payload, ChatMessage.class); // Dùng hàm chung
+                    if (msg != null) {
+                        callback.accept(msg);
+                        messageQueue.offer(msg);
                     }
                 }
             });
 
-            subscriptionIds.put(id, destination);
-            TerminalUI.printSuccess("Subscribed to room " + roomId);
+            subscriptionIds.put(id, subscription);
+            log.info("Subscribed to room " + roomId);
         } catch (Exception e) {
-            TerminalUI.printError("Subscribe failed: " + e.getMessage());
+            log.error("Subscribe failed: " + e.getMessage());
         }
     }
 
     /**
-     * 💬 Subscribe to private messages (both user queue and topic fallback)
+     * Unsubscribe from chat room messages
+     */
+    public void unsubscribeFromRoom(Long roomId) {
+        String id = "room-" + roomId;
+        // ✅ FIX: StompSession.Subscription
+        StompSession.Subscription subscription = subscriptionIds.get(id);
+        if (subscription != null) {
+            try {
+                subscription.unsubscribe();
+                subscriptionIds.remove(id);
+                log.info("Unsubscribed from room " + roomId);
+            } catch (Exception e) {
+                log.error("Unsubscribe failed: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 📎 Send file message to room
+     */
+    public void sendFileMessage(Long roomId, String fileName, String fileUrl) {
+        if (stompSession == null || !connected)
+            return;
+
+        try {
+            ChatMessage message = new ChatMessage();
+            message.setContent(fileUrl);
+            message.setFileName(fileName);
+            message.setRoomId(roomId);
+            message.setSenderId(currentUserId);
+            message.setSenderUsername(currentUsername);
+            message.setMessageType(ChatMessage.MessageType.FILE);
+            message.setTimestamp(java.time.LocalDateTime.now());
+
+            String destination = "/app/chat/room/" + roomId;
+            String json = objectMapper.writeValueAsString(message);
+            stompSession.send(destination, json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.error("Send file failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 💬 Subscribe to private messages
      */
     public void subscribeToPrivateMessages(Consumer<ChatMessage> callback) {
-        if (stompSession == null || !connected) {
-            TerminalUI.printError("Not connected to WebSocket");
-            log.error("❌ Cannot subscribe - stompSession={}, connected={}", stompSession, connected);
+        if (stompSession == null || !connected)
             return;
+
+        // Only subscribe to user queue (primary channel) - avoid duplicate
+        // subscriptions
+        String userQueueDestination = "/user/queue/messages";
+        if (!subscriptionIds.containsKey("private-messages")) {
+            subscribeToDestination(userQueueDestination, callback, "private-messages");
         }
 
-        // Subscribe to user queue (primary)
-        String userQueueDestination = "/user/queue/messages";
-        subscribeToDestination(userQueueDestination, callback, "user-queue");
-
-        // Subscribe to topic fallback for this user's ID
+        // Fallback topic subscription only if user queue is not available
+        // This is kept as backup for servers that don't support user destinations
         String topicDestination = "/topic/private/" + currentUserId;
-        subscribeToDestination(topicDestination, callback, "topic-fallback");
-
-        TerminalUI.printSuccess("Subscribed to private messages");
+        if (!subscriptionIds.containsKey("private-messages-fallback")) {
+            subscribeToDestination(topicDestination, callback, "private-messages-fallback");
+        }
     }
+
+    // Track processed message IDs to avoid duplicates
+    private final Set<Long> processedMessageIds = java.util.Collections.synchronizedSet(new java.util.HashSet<>());
+    private static final int MAX_PROCESSED_IDS = 1000; // Limit memory usage
 
     private void subscribeToDestination(String destination, Consumer<ChatMessage> callback, String subscriptionName) {
         try {
+            // Skip if already subscribed
+            if (subscriptionIds.containsKey(subscriptionName)) {
+                log.debug("Already subscribed to {}", subscriptionName);
+                return;
+            }
 
-            stompSession.subscribe(destination, new StompFrameHandler() {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
                 @Override
-                public Type getPayloadType(StompHeaders headers) {
-                    // Không có converter - Spring truyền byte[] thô
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
                     return byte[].class;
                 }
 
                 @Override
-                public void handleFrame(StompHeaders headers, Object payload) {
-                    try {
-                        ChatMessage msg = null;
-
-                        if (payload instanceof String) {
-                            String json = (String) payload;
-                            msg = objectMapper.readValue(json, ChatMessage.class);
-                        } else if (payload instanceof ChatMessage) {
-                            msg = (ChatMessage) payload;
-                        } else if (payload instanceof byte[]) {
-                            String json = new String((byte[]) payload, java.nio.charset.StandardCharsets.UTF_8);
-                            msg = objectMapper.readValue(json, ChatMessage.class);
-                        } else {
-                            // Try to convert via ObjectMapper as generic object
-                            msg = objectMapper.convertValue(payload, ChatMessage.class);
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    ChatMessage msg = parsePayload(payload, ChatMessage.class);
+                    if (msg != null) {
+                        // Deduplication: Skip if we've already processed this message
+                        if (msg.getId() != null && processedMessageIds.contains(msg.getId())) {
+                            log.debug("Skipping duplicate message: {}", msg.getId());
+                            return;
                         }
 
-                        if (msg != null) {
-                            callback.accept(msg);
+                        // Track processed message ID
+                        if (msg.getId() != null) {
+                            processedMessageIds.add(msg.getId());
+                            // Cleanup old IDs to prevent memory leak
+                            if (processedMessageIds.size() > MAX_PROCESSED_IDS) {
+                                processedMessageIds.clear();
+                            }
                         }
-                    } catch (Exception e) {
-                        log.error("❌ [PAYLOAD_ERROR-{}] Error parsing message (payload type: {}): {}",
-                                subscriptionName,
-                                payload != null ? payload.getClass().getSimpleName() : "null",
-                                e.getMessage());
+
+                        callback.accept(msg);
                     }
                 }
             });
-
-            subscriptionIds.put(subscriptionName, destination);
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("Subscribed to {} as {}", destination, subscriptionName);
         } catch (Exception e) {
-            log.error("❌ [SUBSCRIPTION_ERROR-{}] Failed: {}", subscriptionName, e.getMessage(), e);
+            log.error("Subscribe failed: " + e.getMessage());
         }
     }
 
@@ -239,10 +283,8 @@ public class WebSocketClient {
      * 📤 Send message to room
      */
     public void sendChatMessage(Long roomId, String content) {
-        if (stompSession == null || !connected) {
-            TerminalUI.printError("Not connected to WebSocket");
+        if (stompSession == null || !connected)
             return;
-        }
 
         try {
             ChatMessage message = new ChatMessage();
@@ -254,15 +296,10 @@ public class WebSocketClient {
             message.setTimestamp(java.time.LocalDateTime.now());
 
             String destination = "/app/chat/room/" + roomId;
-
-            // Convert to JSON byte[] vì getPayloadType return byte[].class
             String json = objectMapper.writeValueAsString(message);
-            byte[] payload = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            stompSession.send(destination, payload);
+            stompSession.send(destination, json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception e) {
-            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            TerminalUI.printError("Send failed: " + errorMsg);
-            e.printStackTrace();
+            log.error("Send failed: " + e.getMessage());
         }
     }
 
@@ -270,10 +307,8 @@ public class WebSocketClient {
      * 🔒 Send private message
      */
     public void sendPrivateMessage(Long recipientId, String content) {
-        if (stompSession == null || !connected) {
-            TerminalUI.printError("Not connected to WebSocket");
+        if (stompSession == null || !connected)
             return;
-        }
 
         try {
             ChatMessage message = new ChatMessage();
@@ -282,18 +317,13 @@ public class WebSocketClient {
             message.setSenderUsername(currentUsername);
             message.setMessageType(ChatMessage.MessageType.TEXT);
             message.setTimestamp(java.time.LocalDateTime.now());
-            message.setRecipientId(recipientId); // Set recipient ID
+            message.setRecipientId(recipientId);
 
             String destination = "/app/private/" + recipientId;
-
-            // Convert to JSON byte[] vì getPayloadType return byte[].class
             String json = objectMapper.writeValueAsString(message);
-            byte[] payload = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            stompSession.send(destination, payload);
-            TerminalUI.printSuccess("Private message sent");
+            stompSession.send(destination, json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception e) {
-            String errorMsg = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            TerminalUI.printError("Send private failed: " + errorMsg);
+            log.error("Send private failed: " + e.getMessage());
         }
     }
 
@@ -303,7 +333,6 @@ public class WebSocketClient {
     public void sendTypingIndicator(Long roomId, boolean typing) {
         if (stompSession == null || !connected)
             return;
-
         try {
             TypingIndicator indicator = new TypingIndicator();
             indicator.setRoomId(roomId);
@@ -311,114 +340,78 @@ public class WebSocketClient {
 
             String destination = "/app/typing/" + roomId;
             String json = objectMapper.writeValueAsString(indicator);
-            byte[] payload = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            stompSession.send(destination, payload);
+            stompSession.send(destination, json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception e) {
-            // Silent fail for typing indicator
+            // silent
         }
     }
 
-    /**
-     * 📨 Get message from queue (blocking)
-     */
     public ChatMessage getNextMessage(long timeoutSeconds) throws InterruptedException {
         return messageQueue.poll(timeoutSeconds, TimeUnit.SECONDS);
     }
 
     /**
-     * 👥 Subscribe to user status updates (real-time online/offline status)
+     * 👥 Subscribe to user status updates
      */
     public void subscribeToUserStatus(Consumer<UserStatusMessage> callback) {
-        if (stompSession == null || !connected) {
-            TerminalUI.printError("Not connected to WebSocket");
+        if (stompSession == null || !connected)
             return;
-        }
 
         try {
             String destination = "/topic/user-status";
-
-            stompSession.subscribe(destination, new StompFrameHandler() {
+            // ✅ FIX: Lấy subscription object để lưu vào Map
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
                 @Override
-                public Type getPayloadType(StompHeaders headers) {
-                    // Không có converter - Spring truyền byte[] thô
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
                     return byte[].class;
                 }
 
                 @Override
-                public void handleFrame(StompHeaders headers, Object payload) {
-                    try {
-                        UserStatusMessage statusUpdate = null;
-
-                        if (payload instanceof String) {
-                            String json = (String) payload;
-                            statusUpdate = objectMapper.readValue(json, UserStatusMessage.class);
-                        } else if (payload instanceof UserStatusMessage) {
-                            statusUpdate = (UserStatusMessage) payload;
-                        } else if (payload instanceof byte[]) {
-                            String json = new String((byte[]) payload, java.nio.charset.StandardCharsets.UTF_8);
-                            statusUpdate = objectMapper.readValue(json, UserStatusMessage.class);
-                        } else {
-                            statusUpdate = objectMapper.convertValue(payload, UserStatusMessage.class);
-                        }
-
-                        if (statusUpdate != null) {
-                            callback.accept(statusUpdate);
-                        }
-                    } catch (Exception e) {
-                        log.error("❌ Error parsing user status message (payload type: {}): {}",
-                                payload != null ? payload.getClass().getSimpleName() : "null",
-                                e.getMessage());
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    UserStatusMessage status = parsePayload(payload, UserStatusMessage.class);
+                    if (status != null) {
+                        callback.accept(status);
                     }
                 }
             });
 
-            subscriptionIds.put("user-status", destination);
+            subscriptionIds.put("user-status", subscription); // ✅ Đã sửa (lưu Subscription thay vì String)
         } catch (Exception e) {
-            log.error("❌ [SUBSCRIPTION_ERROR] Failed to subscribe to user status: {}", e.getMessage(), e);
+            log.error("Failed to subscribe to user status: " + e.getMessage());
         }
     }
 
     /**
-     * 📤 Send user status change (online/offline visibility)
+     * 📤 Send user status change
      */
     public void sendStatusChange(Long userId, boolean isOnline) {
-        if (stompSession == null || !connected) {
-            log.warn("⚠️ Not connected - cannot send status change");
+        if (stompSession == null || !connected)
             return;
-        }
 
         try {
             Map<String, Object> statusMessage = new HashMap<>();
             statusMessage.put("userId", userId);
             statusMessage.put("isOnline", isOnline);
-            // Convert to JSON byte[] vì getPayloadType return byte[].class
             String json = objectMapper.writeValueAsString(statusMessage);
-            byte[] payload = json.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            stompSession.send("/app/status/change", payload);
-            // log.debug("📤 Sent status change: userId={}, isOnline={}", userId, isOnline);
+            stompSession.send("/app/status/change", json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception e) {
-            log.error("❌ Failed to send status change: {}", e.getMessage(), e);
+            log.error("Failed to send status change: " + e.getMessage());
         }
     }
 
-    /**
-     * ✅ Check connection status
-     */
     public boolean isConnected() {
         return connected && stompSession != null && stompSession.isConnected();
     }
 
-    /**
-     * 🔌 Disconnect from server
-     */
     public void disconnect() {
         if (stompSession != null) {
             try {
                 stompSession.disconnect();
                 this.connected = false;
-                TerminalUI.printInfo("Disconnected from WebSocket");
+                log.info("Disconnected from WebSocket");
             } catch (Exception e) {
-                TerminalUI.printError("Disconnect error: " + e.getMessage());
+                log.error("Disconnect error: " + e.getMessage());
             }
         }
     }
@@ -450,30 +443,31 @@ public class WebSocketClient {
         }
 
         @Override
-        public void afterConnected(StompSession session, StompHeaders connectedHeaders) {
-            TerminalUI.printSuccess("STOMP connected");
+        public void afterConnected(@NonNull StompSession session, @NonNull StompHeaders connectedHeaders) {
+            log.info("STOMP connected");
             latch.countDown();
         }
 
         @Override
-        public void handleException(StompSession session, StompCommand command, StompHeaders headers, byte[] payload,
-                Throwable exception) {
-            TerminalUI.printError("STOMP error: " + exception.getMessage());
+        // ✅ FIX 2: Thêm StompCommand vào tham số và import ở trên
+        public void handleException(@NonNull StompSession session, @Nullable StompCommand command,
+                @NonNull StompHeaders headers, @Nullable byte[] payload, @NonNull Throwable exception) {
+            log.error("STOMP error: " + exception.getMessage());
         }
 
         @Override
-        public void handleTransportError(StompSession session, Throwable exception) {
-            TerminalUI.printError("Transport error: " + exception.getMessage());
+        public void handleTransportError(@NonNull StompSession session, @NonNull Throwable exception) {
+            log.error("Transport error: {}", exception.getMessage());
         }
 
         @Override
-        public void handleFrame(StompHeaders headers, Object payload) {
-            // Not used - using inline handlers per subscription
+        public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
         }
 
         @Override
-        public Type getPayloadType(StompHeaders headers) {
-            return null;
+        @NonNull
+        public Type getPayloadType(@NonNull StompHeaders headers) {
+            return String.class; // Default
         }
     }
 }
