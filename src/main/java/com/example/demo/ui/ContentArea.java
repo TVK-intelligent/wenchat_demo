@@ -495,9 +495,10 @@ public class ContentArea extends BorderPane {
                             "-fx-effect: dropshadow(gaussian, rgba(102,126,234,0.3), 8, 0, 0, 3);");
         } else {
             fileCard.setStyle(
-                    "-fx-background-color: white; " +
+                    "-fx-background-color: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); " +
                             "-fx-background-radius: 16 16 16 4; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 8, 0, 0, 3);");
+                            "-fx-border-color: #94a3b8; -fx-border-width: 1.5; -fx-border-radius: 16 16 16 4; " +
+                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 12, 0, 0, 4);");
         }
 
         // File icon with gradient background

@@ -907,7 +907,27 @@ public class ChatService {
             throw new Exception(errorMsg);
         }
 
-        return readResponse(conn.getInputStream());
+        // Parse JSON response to extract file URL from 'content' field
+        // The REST API already saves the message to DB and broadcasts via WebSocket
+        // So we return the fileUrl for display purposes only (no need to send WebSocket
+        // manually)
+        String jsonResponse = readResponse(conn.getInputStream());
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> responseMap = objectMapper.readValue(jsonResponse, Map.class);
+            String fileUrl = (String) responseMap.get("content");
+            if (fileUrl != null && !fileUrl.isEmpty()) {
+                // Prepend base URL if the file URL is relative
+                if (!fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")) {
+                    fileUrl = baseUrl + fileUrl;
+                }
+                return fileUrl;
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse upload response: {}", e.getMessage());
+        }
+
+        return null;
     }
 
     /**

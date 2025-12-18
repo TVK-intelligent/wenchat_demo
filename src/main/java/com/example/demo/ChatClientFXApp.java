@@ -974,11 +974,13 @@ public class ChatClientFXApp extends Application {
                         }
                     } else if (currentRoomId != null) {
                         // ROOM CHAT FILE UPLOAD
+                        // REST API saves message to DB and broadcasts via WebSocket automatically
+                        // No need to send WebSocket message manually - it will arrive via
+                        // handleIncomingMessage
                         String fileUrl = chatService.uploadFile(currentRoomId, selectedFile.getAbsolutePath());
 
                         if (fileUrl != null) {
-                            // Send file message via WebSocket
-                            webSocketClient.sendFileMessage(currentRoomId, selectedFile.getName(), fileUrl);
+                            // Success - message will appear via WebSocket callback from server broadcast
                             appendMessage("✅ Đã gửi file: " + selectedFile.getName());
                         } else {
                             appendMessage("❌ Lỗi tải lên file");
