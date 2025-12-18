@@ -13,6 +13,9 @@ import javafx.scene.shape.Circle;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.function.Consumer;
 
 /**
@@ -22,6 +25,7 @@ import java.util.function.Consumer;
 public class UserSearchDialog extends Stage {
 
     private final ChatService chatService;
+    private Set<Long> friendIds = new HashSet<>();
 
     // UI Components
     private TextField searchField;
@@ -59,7 +63,7 @@ public class UserSearchDialog extends Stage {
 
         resultsList = new ListView<>();
         resultsList.setPrefHeight(300);
-        resultsList.setCellFactory(param -> new UserListCell());
+        resultsList.setCellFactory(param -> new UserListCell(friendIds));
 
         searchButton = new Button("🔍 Tìm kiếm");
         searchButton.getStyleClass().add("search-button");
@@ -172,6 +176,20 @@ public class UserSearchDialog extends Stage {
         statusLabel.setText("Đang tìm kiếm...");
         statusLabel.setStyle("-fx-text-fill: #007bff;");
 
+        // Load friends list to check who is already a friend
+        friendIds.clear();
+        try {
+            List<Map<String, Object>> friends = chatService.getFriends();
+            for (Map<String, Object> friend : friends) {
+                Object idObj = friend.get("id");
+                if (idObj != null) {
+                    friendIds.add(Long.valueOf(idObj.toString()));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not load friends list: " + e.getMessage());
+        }
+
         List<User> results = chatService.searchUsers(keyword);
 
         // Filter out current user from search results
@@ -179,6 +197,9 @@ public class UserSearchDialog extends Stage {
         if (currentUser != null) {
             results.removeIf(u -> u.getId().equals(currentUser.getId()));
         }
+
+        // Update cell factory with current friendIds
+        resultsList.setCellFactory(param -> new UserListCell(friendIds));
 
         resultsList.getItems().clear();
         resultsList.getItems().addAll(results);
@@ -194,6 +215,12 @@ public class UserSearchDialog extends Stage {
 
     // Custom cell for user list
     private static class UserListCell extends ListCell<User> {
+        private final Set<Long> friendIds;
+
+        public UserListCell(Set<Long> friendIds) {
+            this.friendIds = friendIds;
+        }
+
         @Override
         protected void updateItem(User user, boolean empty) {
             super.updateItem(user, empty);
@@ -209,25 +236,51 @@ public class UserSearchDialog extends Stage {
                 avatar.setFill(javafx.scene.paint.Color.color(Math.random(), Math.random(), Math.random()));
 
                 VBox infoBox = new VBox(2);
+
+                // Name row with friend badge
+                HBox nameRow = new HBox(8);
+                nameRow.setAlignment(Pos.CENTER_LEFT);
+
                 Label nameLabel = new Label(user.getDisplayName() != null ? user.getDisplayName() : user.getUsername());
                 nameLabel.setStyle("-fx-font-weight: bold;");
+                nameRow.getChildren().add(nameLabel);
+
+                // Check if this user is a friend
+                if (friendIds != null && friendIds.contains(user.getId())) {
+                    Label friendBadge = new Label("👥 Bạn bè");
+                    friendBadge.setStyle("-fx-background-color: #28a745; -fx-text-fill: white; " +
+                            "-fx-padding: 2 6; -fx-background-radius: 10; -fx-font-size: 10px;");
+                    nameRow.getChildren().add(friendBadge);
+                }
 
                 Label usernameLabel = new Label("@" + user.getUsername());
                 usernameLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
 
-                infoBox.getChildren().addAll(nameLabel, usernameLabel);
+                infoBox.getChildren().addAll(nameRow, usernameLabel);
 
-                Circle statusIndicator = new Circle(8);
+                // Online/Offline status with label
+                HBox statusBox = new HBox(5);
+                statusBox.setAlignment(Pos.CENTER);
+
+                Circle statusIndicator = new Circle(6);
+                Label statusLabel = new Label();
+
                 if (user.getStatus() == User.Status.ONLINE) {
                     statusIndicator.setFill(javafx.scene.paint.Color.LIME);
+                    statusLabel.setText("Online");
+                    statusLabel.setStyle("-fx-text-fill: #28a745; -fx-font-size: 11px; -fx-font-weight: bold;");
                 } else {
                     statusIndicator.setFill(javafx.scene.paint.Color.GRAY);
+                    statusLabel.setText("Offline");
+                    statusLabel.setStyle("-fx-text-fill: #6c757d; -fx-font-size: 11px;");
                 }
+
+                statusBox.getChildren().addAll(statusIndicator, statusLabel);
 
                 Region spacer = new Region();
                 HBox.setHgrow(spacer, Priority.ALWAYS);
 
-                userBox.getChildren().addAll(avatar, infoBox, spacer, statusIndicator);
+                userBox.getChildren().addAll(avatar, infoBox, spacer, statusBox);
 
                 setGraphic(userBox);
                 setText(null);
