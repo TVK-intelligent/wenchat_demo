@@ -735,15 +735,16 @@ public class ChatClientFXApp extends Application {
         if (params != null && !params.getUnnamed().isEmpty()) {
             for (String param : params.getUnnamed()) {
                 // Skip JVM arguments that start with --
-                if (!param.startsWith("--")) {
+                // Only accept valid HTTP/HTTPS URLs
+                if (!param.startsWith("--") && (param.startsWith("http://") || param.startsWith("https://"))) {
                     return param;
                 }
             }
         }
 
-        // Check environment variable
+        // Check environment variable - validate it's a proper URL
         String envUrl = System.getenv("WEBCHAT_G10_SERVER_URL");
-        if (envUrl != null) {
+        if (envUrl != null && (envUrl.startsWith("http://") || envUrl.startsWith("https://"))) {
             return envUrl;
         }
 
