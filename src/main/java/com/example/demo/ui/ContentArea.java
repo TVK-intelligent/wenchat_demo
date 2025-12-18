@@ -131,13 +131,13 @@ public class ContentArea extends BorderPane {
         if (isDarkMode) {
             messageListView.setStyle(
                     "-fx-background-color: linear-gradient(to bottom, #1f2937 0%, #374151 100%); " +
-                    "-fx-background-radius: 0; " +
-                    "-fx-border-color: transparent;");
+                            "-fx-background-radius: 0; " +
+                            "-fx-border-color: transparent;");
         } else {
             messageListView.setStyle(
                     "-fx-background-color: linear-gradient(to bottom, #fafbfc 0%, #f1f5f9 100%); " +
-                    "-fx-background-radius: 0; " +
-                    "-fx-border-color: transparent;");
+                            "-fx-background-radius: 0; " +
+                            "-fx-border-color: transparent;");
         }
         messageListView.setCellFactory(param -> new MessageCell());
         VBox.setVgrow(messageListView, Priority.ALWAYS);
@@ -224,7 +224,7 @@ public class ContentArea extends BorderPane {
         inputContainer.setPadding(new Insets(18, 24, 18, 24));
         inputContainer.setStyle(
                 "-fx-background-color: " + (isDarkMode ? "#1f2937" : "#fafbfc") + "; " +
-                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 6, 0, 0, 2);");
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 6, 0, 0, 2);");
 
         // Emoji button with picker
         Button emojiBtn = new Button("😊");
@@ -246,7 +246,7 @@ public class ContentArea extends BorderPane {
         inputField.setPromptText("Nhập tin nhắn...");
         inputField.setStyle(
                 "-fx-background-color: " + (isDarkMode ? "#374151" : "#f8fafc") + "; " +
-                "-fx-border-color: " + (isDarkMode ? "#6b7280" : "#e2e8f0") + "; " +
+                        "-fx-border-color: " + (isDarkMode ? "#6b7280" : "#e2e8f0") + "; " +
                         "-fx-border-radius: 25; -fx-background-radius: 25; " +
                         "-fx-padding: 14 22; -fx-font-size: 16px; " +
                         "-fx-text-fill: " + (isDarkMode ? "#f9fafb" : "#1a202c") + "; " +
@@ -420,10 +420,10 @@ public class ContentArea extends BorderPane {
             Label userLabel = new Label(user);
             userLabel.setStyle(
                     "-fx-font-weight: 600; " +
-                    "-fx-font-size: 14px; " +
-                    "-fx-font-family: 'Segoe UI', sans-serif; " +
-                    (isDarkMode ? "-fx-text-fill: white;" : "-fx-text-fill: #4a5568;") + " " +
-                    "-fx-padding: 0 0 6 0;");
+                            "-fx-font-size: 14px; " +
+                            "-fx-font-family: 'Segoe UI', sans-serif; " +
+                            (isDarkMode ? "-fx-text-fill: white;" : "-fx-text-fill: #4a5568;") + " " +
+                            "-fx-padding: 0 0 6 0;");
             messageContainer.getChildren().add(userLabel);
         }
 
@@ -466,19 +466,19 @@ public class ContentArea extends BorderPane {
         messageLabel.setMaxWidth(400);
         messageLabel.setStyle(
                 "-fx-font-size: 16px; " +
-                "-fx-font-family: 'Segoe UI', 'Helvetica Neue', 'Arial', sans-serif; " +
-                "-fx-line-spacing: 1.4; " +
-                "-fx-font-weight: 400; " +
-                (isDarkMode ? "-fx-text-fill: white;" : "-fx-text-fill: #1a202c;") + " " +
-                "-fx-padding: 2 0 2 0;");
+                        "-fx-font-family: 'Segoe UI', 'Helvetica Neue', 'Arial', sans-serif; " +
+                        "-fx-line-spacing: 1.4; " +
+                        "-fx-font-weight: 400; " +
+                        (isDarkMode ? "-fx-text-fill: white;" : "-fx-text-fill: #1a202c;") + " " +
+                        "-fx-padding: 2 0 2 0;");
 
         Label timeLabel = new Label(timestamp.format(DateTimeFormatter.ofPattern("HH:mm")));
         timeLabel.setStyle(
                 "-fx-font-size: 12px; " +
-                "-fx-font-weight: 500; " +
-                "-fx-font-family: 'Segoe UI', sans-serif; " +
-                (isDarkMode ? "-fx-text-fill: rgba(255,255,255,0.8);" : "-fx-text-fill: #718096;") + " " +
-                "-fx-padding: 4 0 0 0;");
+                        "-fx-font-weight: 500; " +
+                        "-fx-font-family: 'Segoe UI', sans-serif; " +
+                        (isDarkMode ? "-fx-text-fill: rgba(255,255,255,0.8);" : "-fx-text-fill: #718096;") + " " +
+                        "-fx-padding: 4 0 0 0;");
 
         HBox timeBox = new HBox(timeLabel);
         timeBox.setAlignment(isMine ? Pos.BOTTOM_RIGHT : Pos.BOTTOM_LEFT);
@@ -616,10 +616,10 @@ public class ContentArea extends BorderPane {
             Label userLabel = new Label(user);
             userLabel.setStyle(
                     "-fx-font-weight: 600; " +
-                    "-fx-font-size: 14px; " +
-                    "-fx-font-family: 'Segoe UI', sans-serif; " +
-                    (isDarkMode ? "-fx-text-fill: #f1f5f9;" : "-fx-text-fill: #4a5568;") + " " +
-                    "-fx-padding: 0 0 6 0;");
+                            "-fx-font-size: 14px; " +
+                            "-fx-font-family: 'Segoe UI', sans-serif; " +
+                            (isDarkMode ? "-fx-text-fill: #f1f5f9;" : "-fx-text-fill: #4a5568;") + " " +
+                            "-fx-padding: 0 0 6 0;");
             messageContainer.getChildren().add(userLabel);
         }
 
@@ -682,13 +682,15 @@ public class ContentArea extends BorderPane {
 
         Label fileLabel = new Label(fileName);
         fileLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; " +
-                (isMine ? "-fx-text-fill: white;" : (isDarkMode ? "-fx-text-fill: #f1f5f9;" : "-fx-text-fill: #212529;")));
+                (isMine ? "-fx-text-fill: white;"
+                        : (isDarkMode ? "-fx-text-fill: #f1f5f9;" : "-fx-text-fill: #212529;")));
         fileLabel.setWrapText(true);
         fileLabel.setMaxWidth(160);
 
         Label sizeLabel = new Label("📦 Tệp đính kèm");
         sizeLabel.setStyle("-fx-font-size: 11px; " +
-                (isMine ? "-fx-text-fill: rgba(255,255,255,0.75);" : (isDarkMode ? "-fx-text-fill: #cbd5e1;" : "-fx-text-fill: #6c757d;")));
+                (isMine ? "-fx-text-fill: rgba(255,255,255,0.75);"
+                        : (isDarkMode ? "-fx-text-fill: #cbd5e1;" : "-fx-text-fill: #6c757d;")));
 
         fileInfo.getChildren().addAll(fileLabel, sizeLabel);
         HBox.setHgrow(fileInfo, Priority.ALWAYS);
@@ -738,7 +740,8 @@ public class ContentArea extends BorderPane {
         // Timestamp
         Label timeLabel = new Label(timestamp.format(DateTimeFormatter.ofPattern("HH:mm")));
         timeLabel.setStyle("-fx-font-size: 10px; -fx-padding: 3 0 0 0; " +
-                (isMine ? "-fx-text-fill: rgba(255,255,255,0.9);" : (isDarkMode ? "-fx-text-fill: #cbd5e1;" : "-fx-text-fill: #9ca3af;")));
+                (isMine ? "-fx-text-fill: rgba(255,255,255,0.9);"
+                        : (isDarkMode ? "-fx-text-fill: #cbd5e1;" : "-fx-text-fill: #9ca3af;")));
 
         VBox contentBox = new VBox(4);
         contentBox.getChildren().addAll(fileCard, timeLabel);
