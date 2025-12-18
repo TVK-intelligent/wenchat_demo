@@ -572,82 +572,130 @@ public class ChatClientFXApp extends Application {
         dialog.getDialogPane().lookupButton(ButtonType.CANCEL).setStyle(
                 "-fx-background-color: #6c757d; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 8 15 8 15; -fx-cursor: hand;");
 
-        // Show display name only for register
-        dialog.getDialogPane().lookupButton(registerButtonType).addEventFilter(ActionEvent.ACTION, event -> {
-            displayName.setVisible(true);
-            displayNameLabel.setVisible(true);
-            dialog.setHeaderText("📝 Tạo tài khoản mới");
-        });
+        // Use a holder for login result
+        final boolean[] loginSuccess = { false };
 
-        dialog.getDialogPane().lookupButton(loginButtonType).addEventFilter(ActionEvent.ACTION, event -> {
-            displayName.setVisible(false);
-            displayNameLabel.setVisible(false);
-            dialog.setHeaderText("Đăng nhập vào WebChat");
-        });
+        // Handle login button click with event filter to prevent dialog from closing on
+        // error
+        Button loginButton = (Button) dialog.getDialogPane().lookupButton(loginButtonType);
+        loginButton.addEventFilter(ActionEvent.ACTION, event -> {
+            try {
+                ChatService.LoginResponse loginResponse = chatService.login(username.getText(), password.getText());
+                if (loginResponse != null && loginResponse.getToken() != null) {
+                    jwtToken = loginResponse.getToken();
+                    currentUserId = loginResponse.getUserId();
+                    currentUsername = loginResponse.getUsername();
+                    currentUser = chatService.getCurrentUser();
+                    chatService.setJwtToken(jwtToken);
+                    webSocketClient.setCurrentUserId(currentUserId);
+                    webSocketClient.setCurrentUsername(currentUsername);
+                    webSocketClient.connect(jwtToken);
 
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == loginButtonType) {
-                try {
-                    ChatService.LoginResponse loginResponse = chatService.login(username.getText(), password.getText());
-                    if (loginResponse != null && loginResponse.getToken() != null) {
-                        jwtToken = loginResponse.getToken();
-                        currentUserId = loginResponse.getUserId();
-                        currentUsername = loginResponse.getUsername();
-                        currentUser = chatService.getCurrentUser();
-                        chatService.setJwtToken(jwtToken);
-                        webSocketClient.setCurrentUserId(currentUserId);
-                        webSocketClient.setCurrentUsername(currentUsername);
-                        webSocketClient.connect(jwtToken);
+                    // Subscribe to default room messages
+                    webSocketClient.subscribeToRoom(1L, this::handleIncomingMessage);
 
-                        // Subscribe to default room messages
-                        webSocketClient.subscribeToRoom(1L, this::handleIncomingMessage);
+                    // Subscribe to notifications
+                    webSocketClient.subscribeToFriendRequests(this::handleFriendRequestNotification);
+                    webSocketClient.subscribeToRoomInvites(this::handleRoomInviteNotification);
+                    webSocketClient.subscribeToPrivateMessages(this::handlePrivateMessageNotification);
 
-                        // Subscribe to notifications
-                        webSocketClient.subscribeToFriendRequests(this::handleFriendRequestNotification);
-                        webSocketClient.subscribeToRoomInvites(this::handleRoomInviteNotification);
-                        webSocketClient.subscribeToPrivateMessages(this::handlePrivateMessageNotification);
-
-                        // Update UI status
-                        contentArea.setOnlineStatus(true);
-                        sidebar.setCurrentUser(currentUsername);
-                        appendMessage("✅ Đăng nhập thành công!");
-                        return ButtonType.OK;
-                    } else {
-                        showError("❌ Đăng nhập thất bại", "Tên đăng nhập hoặc mật khẩu không đúng.");
-                        return ButtonType.CANCEL;
-                    }
-                } catch (Exception e) {
-                    log.error("Login error: {}", e.getMessage());
-                    showError("❌ Đăng nhập thất bại", "Lỗi kết nối: " + e.getMessage());
-                    return ButtonType.CANCEL;
+                    // Update UI status
+                    contentArea.setOnlineStatus(true);
+                    sidebar.setCurrentUser(currentUsername);
+                    loginSuccess[0] = true;
+                    // Allow dialog to close
+                } else {
+                    // Show error and prevent dialog from closing
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("❌ Đăng nhập thất bại");
+                    alert.setHeaderText(null);
+                    alert.setContentText("Tên đăng nhập hoặc mật khẩu không đúng.");
+                    alert.initOwner(dialog.getDialogPane().getScene().getWindow());
+                    alert.showAndWait();
+                    event.consume();
                 }
-            } else if (dialogButton == registerButtonType) {
-                try {
-                    boolean success = chatService.register(username.getText(), password.getText(),
-                            displayName.getText());
-                    if (success) {
-                        appendMessage("✅ Đăng ký thành công! Vui lòng đăng nhập.");
-                        return ButtonType.CANCEL; // Stay for login
-                    } else {
-                        showError("❌ Đăng ký thất bại", "Không thể đăng ký tài khoản.");
-                        return ButtonType.CANCEL;
-                    }
-                } catch (Exception e) {
-                    log.error("Register error: {}", e.getMessage());
-                    showError("❌ Đăng ký thất bại", "Lỗi kết nối: " + e.getMessage());
-                    return ButtonType.CANCEL;
-                }
+            } catch (Exception e) {
+                log.error("Login error: {}", e.getMessage());
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("❌ Đăng nhập thất bại");
+                alert.setHeaderText(null);
+                alert.setContentText("Lỗi kết nối: " + e.getMessage());
+                alert.initOwner(dialog.getDialogPane().getScene().getWindow());
+                alert.showAndWait();
+                event.consume();
             }
-            return ButtonType.CANCEL;
+        });
+
+        // Handle register button click
+        Button registerButton = (Button) dialog.getDialogPane().lookupButton(registerButtonType);
+        registerButton.addEventFilter(ActionEvent.ACTION, event -> {
+            // First show the display name field if not visible
+            if (!displayName.isVisible()) {
+                displayName.setVisible(true);
+                displayNameLabel.setVisible(true);
+                dialog.setHeaderText("📝 Tạo tài khoản mới");
+                event.consume(); // Prevent dialog from closing, just show fields
+                return;
+            }
+
+            // Otherwise, attempt registration
+            try {
+                boolean success = chatService.register(username.getText(), password.getText(), displayName.getText());
+                if (success) {
+                    // Show success message and reset for login
+                    Alert successAlert = new Alert(Alert.AlertType.INFORMATION);
+                    successAlert.setTitle("✅ Đăng ký thành công");
+                    successAlert.setHeaderText(null);
+                    successAlert.setContentText("Đăng ký thành công! Vui lòng đăng nhập.");
+                    successAlert.initOwner(dialog.getDialogPane().getScene().getWindow());
+                    successAlert.showAndWait();
+
+                    // Reset to login mode
+                    displayName.setVisible(false);
+                    displayNameLabel.setVisible(false);
+                    displayName.clear();
+                    dialog.setHeaderText("Đăng nhập vào WebChat");
+                    event.consume(); // Stay for login
+                } else {
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("❌ Đăng ký thất bại");
+                    alert.setHeaderText(null);
+                    alert.setContentText("Không thể đăng ký tài khoản.");
+                    alert.initOwner(dialog.getDialogPane().getScene().getWindow());
+                    alert.showAndWait();
+                    event.consume();
+                }
+            } catch (Exception e) {
+                log.error("Register error: {}", e.getMessage());
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("❌ Đăng ký thất bại");
+                alert.setHeaderText(null);
+                alert.setContentText("Lỗi kết nối: " + e.getMessage());
+                alert.initOwner(dialog.getDialogPane().getScene().getWindow());
+                alert.showAndWait();
+                event.consume();
+            }
         });
 
         Optional<ButtonType> result = dialog.showAndWait();
-        if (result.isPresent() && result.get() == ButtonType.OK) {
+        if (loginSuccess[0]) {
             // Logged in successfully - load rooms
+            appendMessage("✅ Đăng nhập thành công!");
             loadRooms();
         } else {
             // Not logged in, close app
-            Platform.exit();
+            // Use runLater to exit AFTER dialog has fully closed to avoid
+            // "Key not associated with a running event loop" error
+            Platform.runLater(() -> {
+                if (webSocketClient != null) {
+                    try {
+                        webSocketClient.disconnect();
+                    } catch (Exception ignored) {
+                    }
+                }
+                Platform.exit();
+                System.exit(0);
+            });
         }
     }
 
