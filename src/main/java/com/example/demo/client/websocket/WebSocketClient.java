@@ -502,6 +502,24 @@ public class WebSocketClient {
         this.currentUserId = userId;
     }
 
+    /**
+     * 📋 Register user session with the server
+     * Should be called after setting currentUserId and connecting
+     */
+    public void registerSession() {
+        if (stompSession == null || !connected || currentUserId == null) {
+            log.warn("Cannot register session: not connected or no user ID");
+            return;
+        }
+
+        try {
+            stompSession.send("/app/register-session", currentUserId.toString());
+            log.info("User session registered for userId: {}", currentUserId);
+        } catch (Exception e) {
+            log.error("Failed to send user registration: {}", e.getMessage());
+        }
+    }
+
     public void setCurrentUsername(String username) {
         this.currentUsername = username;
     }

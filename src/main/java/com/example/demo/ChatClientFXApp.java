@@ -355,7 +355,15 @@ public class ChatClientFXApp extends Application {
                     boolean isMine = msg.getSenderId().equals(currentUserId);
                     String displayName = isMine ? currentUsername
                             : (friend.getDisplayName() != null ? friend.getDisplayName() : friend.getUsername());
-                    contentArea.addMessage(displayName, msg.getContent(), msg.getTimestamp(), isMine);
+
+                    // Check if this is a file message
+                    if (msg.getMessageType() == ChatMessage.MessageType.FILE ||
+                            msg.getMessageType() == ChatMessage.MessageType.IMAGE) {
+                        contentArea.addFileMessage(displayName, msg.getFileName(), msg.getContent(),
+                                msg.getTimestamp(), isMine);
+                    } else {
+                        contentArea.addMessage(displayName, msg.getContent(), msg.getTimestamp(), isMine);
+                    }
                 }
             }
         } catch (Exception e) {
@@ -388,7 +396,15 @@ public class ChatClientFXApp extends Application {
                 javafx.application.Platform.runLater(() -> {
                     String displayName = expectedUser.getDisplayName() != null ? expectedUser.getDisplayName()
                             : expectedUser.getUsername();
-                    contentArea.addMessage(displayName, message.getContent(), message.getTimestamp(), false);
+
+                    // Check if this is a file message
+                    if (message.getMessageType() == ChatMessage.MessageType.FILE ||
+                            message.getMessageType() == ChatMessage.MessageType.IMAGE) {
+                        contentArea.addFileMessage(displayName, message.getFileName(), message.getContent(),
+                                message.getTimestamp(), false);
+                    } else {
+                        contentArea.addMessage(displayName, message.getContent(), message.getTimestamp(), false);
+                    }
                 });
             }
         }
@@ -590,6 +606,7 @@ public class ChatClientFXApp extends Application {
                     webSocketClient.setCurrentUserId(currentUserId);
                     webSocketClient.setCurrentUsername(currentUsername);
                     webSocketClient.connect(jwtToken);
+                    webSocketClient.registerSession(); // Register user session after connecting
 
                     // Subscribe to default room messages
                     webSocketClient.subscribeToRoom(1L, this::handleIncomingMessage);
@@ -925,52 +942,53 @@ public class ChatClientFXApp extends Application {
             File selectedFile = fileChooser.showOpenDialog(contentArea.getScene().getWindow());
 
             if (selectedFile != null) {
-                if (webSocketClient != null && webSocketClient.isConnected() && currentRoomId != null) {
+                if (webSocketClient != null && webSocketClient.isConnected()) {
                     // Show loading
                     contentArea.getFileButton().setDisable(true);
                     contentArea.getFileButton().setText("⏳ Đang tải...");
 
-                    // Upload file
-                    String fileUrl = chatService.uploadFile(currentRoomId, selectedFile.getAbsolutePath());
+                    // Check if we're in private chat mode
+                    if (contentArea.isPrivateMode() && contentArea.getPrivateChatUser() != null) {
+                        // PRIVATE CHAT FILE UPLOAD
+                        User privateChatUser = contentArea.getPrivateChatUser();
 
-                    if (fileUrl != null) {
-                        // Send file message via WebSocket
-                        webSocketClient.sendFileMessage(currentRoomId, selectedFile.getName(), fileUrl);
+                        // Upload file to private endpoint
+                        String fileUrl = chatService.uploadPrivateFile(
+                                privateChatUser.getId(),
+                                selectedFile.getAbsolutePath());
 
-                        // Add to local display (Me)
-                        // Note: handleIncomingMessage will handle display if echoed, but we display
-                        // locally for immediate feedback
-                        // Actually, let's let handleIncomingmessage do it to avoid dupes if server
-                        // echoes
-                        // But file upload might be slow, so maybe instant feedback is good?
-                        // For now we rely on handleIncomingMessage for consistency, logic in
-                        // sendMessage relies on server echo too?
-                        // Wait, sendMessage DOES NOT add to contentArea.
-                        // I'll assume server echoes.
+                        if (fileUrl != null && !fileUrl.isEmpty()) {
+                            // Display file message locally (server saves to DB via REST API)
+                            contentArea.addFileMessage(
+                                    currentUsername,
+                                    selectedFile.getName(),
+                                    fileUrl,
+                                    java.time.LocalDateTime.now(),
+                                    true);
 
-                        // Store in room messages
-                        // DO NOT add to roomMessages here, wait for server echo
-                        /*
-                         * ChatMessage fileMessage = ChatMessage.builder()
-                         * .roomId(currentRoomId)
-                         * .senderId(currentUserId)
-                         * .senderUsername(currentUsername)
-                         * .senderDisplayName(currentUsername)
-                         * .content(fileUrl)
-                         * .fileName(selectedFile.getName())
-                         * .timestamp(java.time.LocalDateTime.now())
-                         * .messageType(ChatMessage.MessageType.FILE)
-                         * .build();
-                         * roomMessages.computeIfAbsent(currentRoomId, k -> new
-                         * ArrayList<>()).add(fileMessage);
-                         */
+                            appendMessage("✅ Đã gửi file: " + selectedFile.getName());
+                            log.info("📎 Sent private file: {} to user {}", selectedFile.getName(),
+                                    privateChatUser.getId());
+                        } else {
+                            appendMessage("❌ Lỗi tải lên file");
+                        }
+                    } else if (currentRoomId != null) {
+                        // ROOM CHAT FILE UPLOAD
+                        String fileUrl = chatService.uploadFile(currentRoomId, selectedFile.getAbsolutePath());
 
-                        appendMessage("✅ Đã gửi file: " + selectedFile.getName());
+                        if (fileUrl != null) {
+                            // Send file message via WebSocket
+                            webSocketClient.sendFileMessage(currentRoomId, selectedFile.getName(), fileUrl);
+                            appendMessage("✅ Đã gửi file: " + selectedFile.getName());
+                        } else {
+                            appendMessage("❌ Lỗi tải lên file");
+                        }
                     } else {
-                        appendMessage("❌ Lỗi tải lên file");
+                        contentArea.addMessage("System", "❌ Chưa chọn phòng hoặc người nhận",
+                                java.time.LocalDateTime.now());
                     }
                 } else {
-                    contentArea.addMessage("System", "❌ Chưa kết nối đến server hoặc chưa chọn phòng",
+                    contentArea.addMessage("System", "❌ Chưa kết nối đến server",
                             java.time.LocalDateTime.now());
                 }
             }
