@@ -2,6 +2,8 @@ package com.example.demo.client.websocket;
 
 import com.example.demo.client.config.ServerConfig;
 import com.example.demo.client.model.ChatMessage;
+import com.example.demo.client.model.FriendRequestNotification;
+import com.example.demo.client.model.RoomInviteNotification;
 import com.example.demo.client.model.TypingIndicator;
 import com.example.demo.client.model.UserStatusMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -397,6 +399,86 @@ public class WebSocketClient {
             stompSession.send("/app/status/change", json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.error("Failed to send status change: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 👋 Subscribe to friend request notifications
+     */
+    public void subscribeToFriendRequests(Consumer<FriendRequestNotification> callback) {
+        if (stompSession == null || !connected)
+            return;
+
+        String destination = "/user/queue/friend-requests";
+        String subscriptionName = "friend-requests";
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to {}", subscriptionName);
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    FriendRequestNotification notification = parsePayload(payload, FriendRequestNotification.class);
+                    if (notification != null) {
+                        log.info("Received friend request from: {}", notification.getSenderUsername());
+                        callback.accept(notification);
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("Subscribed to friend requests");
+        } catch (Exception e) {
+            log.error("Failed to subscribe to friend requests: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🏠 Subscribe to room invite notifications
+     */
+    public void subscribeToRoomInvites(Consumer<RoomInviteNotification> callback) {
+        if (stompSession == null || !connected)
+            return;
+
+        String destination = "/user/queue/room-invites";
+        String subscriptionName = "room-invites";
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to {}", subscriptionName);
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    RoomInviteNotification notification = parsePayload(payload, RoomInviteNotification.class);
+                    if (notification != null) {
+                        log.info("Received room invite to: {}", notification.getRoomName());
+                        callback.accept(notification);
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("Subscribed to room invites");
+        } catch (Exception e) {
+            log.error("Failed to subscribe to room invites: " + e.getMessage());
         }
     }
 

@@ -14,6 +14,8 @@ import javafx.scene.effect.DropShadow;
 import lombok.Getter;
 
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.function.Consumer;
 
 /**
@@ -58,6 +60,12 @@ public class Sidebar extends VBox {
             Color.web("#f5576c"), Color.web("#4facfe"), Color.web("#43e97b"),
             Color.web("#fa709a"), Color.web("#30cfd0")
     };
+
+    // Unread badge tracking
+    private final Map<Long, Integer> unreadCounts = new HashMap<>();
+    private int friendRequestBadgeCount = 0;
+    private int roomInviteBadgeCount = 0;
+    private Label dmBadgeLabel;
 
     public Sidebar() {
         super(0);
@@ -534,6 +542,102 @@ public class Sidebar extends VBox {
 
     public void setOnFriendMessageClicked(Consumer<com.example.demo.client.model.User> handler) {
         this.onFriendMessageClicked = handler;
+    }
+
+    // ============== Badge Methods ==============
+
+    /**
+     * Increment friend request notification badge
+     */
+    public void incrementFriendRequestBadge() {
+        friendRequestBadgeCount++;
+        updateFriendsBadge();
+    }
+
+    /**
+     * Clear friend request badge
+     */
+    public void clearFriendRequestBadge() {
+        friendRequestBadgeCount = 0;
+        updateFriendsBadge();
+    }
+
+    /**
+     * Increment room invite notification badge
+     */
+    public void incrementRoomInviteBadge() {
+        roomInviteBadgeCount++;
+        updateInvitesBadge();
+    }
+
+    /**
+     * Clear room invite badge
+     */
+    public void clearRoomInviteBadge() {
+        roomInviteBadgeCount = 0;
+        updateInvitesBadge();
+    }
+
+    /**
+     * Increment unread count for a specific friend
+     */
+    public void incrementUnreadCount(Long friendId) {
+        unreadCounts.merge(friendId, 1, Integer::sum);
+        updateDMBadge();
+        friendsListView.refresh(); // Refresh to show badge on friend item
+    }
+
+    /**
+     * Clear unread count for a specific friend
+     */
+    public void clearUnreadCount(Long friendId) {
+        unreadCounts.remove(friendId);
+        updateDMBadge();
+        friendsListView.refresh();
+    }
+
+    /**
+     * Get unread count for a friend
+     */
+    public int getUnreadCount(Long friendId) {
+        return unreadCounts.getOrDefault(friendId, 0);
+    }
+
+    /**
+     * Get total unread message count
+     */
+    public int getTotalUnreadCount() {
+        return unreadCounts.values().stream().mapToInt(Integer::intValue).sum();
+    }
+
+    private void updateDMBadge() {
+        int total = getTotalUnreadCount();
+        if (dmBadgeLabel != null) {
+            if (total > 0) {
+                dmBadgeLabel.setText(String.valueOf(total));
+                dmBadgeLabel.setVisible(true);
+            } else {
+                dmBadgeLabel.setVisible(false);
+            }
+        }
+    }
+
+    private void updateFriendsBadge() {
+        // Update friends button to show badge
+        if (friendRequestBadgeCount > 0) {
+            friendsButton.setText("👥 " + friendRequestBadgeCount);
+        } else {
+            friendsButton.setText("👥");
+        }
+    }
+
+    private void updateInvitesBadge() {
+        // Update invites button to show badge
+        if (roomInviteBadgeCount > 0) {
+            invitesButton.setText("📨 " + roomInviteBadgeCount);
+        } else {
+            invitesButton.setText("📨 Lời mời");
+        }
     }
 
     /**

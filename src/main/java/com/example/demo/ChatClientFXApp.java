@@ -38,11 +38,14 @@ import com.example.demo.ui.MessageHistoryDialog;
 import com.example.demo.ui.RoomInviteDialog;
 import com.example.demo.ui.PrivateChatDialog;
 import com.example.demo.client.service.ChatService;
+import com.example.demo.client.service.NotificationService;
 import com.example.demo.client.websocket.WebSocketClient;
 import com.example.demo.client.config.ServerConfig;
 import com.example.demo.client.model.ChatRoom;
 import com.example.demo.client.model.User;
 import com.example.demo.client.model.ChatMessage;
+import com.example.demo.client.model.FriendRequestNotification;
+import com.example.demo.client.model.RoomInviteNotification;
 
 /**
  * 🚀 WebChat Group 10 Desktop Client - JavaFX Application
@@ -63,6 +66,7 @@ public class ChatClientFXApp extends Application {
 
     private ChatService chatService;
     private WebSocketClient webSocketClient;
+    private NotificationService notificationService;
     private String jwtToken;
     private Long currentUserId;
     private String currentUsername;
@@ -123,6 +127,17 @@ public class ChatClientFXApp extends Application {
             primaryStage.setTitle("WebChat Group 10");
             primaryStage.setScene(scene);
             primaryStage.show();
+
+            // Initialize notification service with window focus tracking
+            notificationService = NotificationService.getInstance();
+            notificationService.setPrimaryStage(primaryStage);
+
+            // Cleanup notification service on close
+            primaryStage.setOnCloseRequest(e -> {
+                if (notificationService != null) {
+                    notificationService.shutdown();
+                }
+            });
 
             // Initialize chat client
             initializeChatClient();
@@ -587,6 +602,11 @@ public class ChatClientFXApp extends Application {
                         // Subscribe to default room messages
                         webSocketClient.subscribeToRoom(1L, this::handleIncomingMessage);
 
+                        // Subscribe to notifications
+                        webSocketClient.subscribeToFriendRequests(this::handleFriendRequestNotification);
+                        webSocketClient.subscribeToRoomInvites(this::handleRoomInviteNotification);
+                        webSocketClient.subscribeToPrivateMessages(this::handlePrivateMessageNotification);
+
                         // Update UI status
                         contentArea.setOnlineStatus(true);
                         sidebar.setCurrentUser(currentUsername);
@@ -943,7 +963,88 @@ public class ChatClientFXApp extends Application {
                         }
                     });
                 }
+
+                // Show notification for messages from others (not from current room or window
+                // not focused)
+                if (message.getSenderId() != null && !message.getSenderId().equals(currentUserId)) {
+                    if (!message.getRoomId().equals(currentRoomId) || !notificationService.isWindowFocused()) {
+                        String displayName = message.getSenderDisplayName() != null
+                                ? message.getSenderDisplayName()
+                                : message.getSenderUsername();
+                        notificationService.showMessageNotification(displayName, message.getContent());
+                    }
+                }
             }
+        }
+    }
+
+    /**
+     * Handle friend request notification
+     */
+    private void handleFriendRequestNotification(FriendRequestNotification notification) {
+        if (notification == null)
+            return;
+
+        log.info("Received friend request from: {}", notification.getSenderUsername());
+
+        // Show desktop notification
+        String displayName = notification.getDisplayName();
+        notificationService.showFriendRequestNotification(displayName);
+
+        // Update sidebar badge (if implemented)
+        Platform.runLater(() -> {
+            sidebar.incrementFriendRequestBadge();
+        });
+    }
+
+    /**
+     * Handle room invite notification
+     */
+    private void handleRoomInviteNotification(RoomInviteNotification notification) {
+        if (notification == null)
+            return;
+
+        log.info("Received room invite to: {}", notification.getRoomName());
+
+        // Show desktop notification
+        String inviterName = notification.getInviterDisplayName();
+        notificationService.showRoomInviteNotification(inviterName, notification.getRoomName());
+
+        // Update sidebar badge (if implemented)
+        Platform.runLater(() -> {
+            sidebar.incrementRoomInviteBadge();
+        });
+    }
+
+    /**
+     * Handle private message notification (for notifications only, not display)
+     */
+    private void handlePrivateMessageNotification(ChatMessage message) {
+        if (message == null)
+            return;
+
+        // Skip if it's our own message
+        if (message.getSenderId().equals(currentUserId)) {
+            return;
+        }
+
+        // Check if we're viewing this private chat
+        User privateChatUser = contentArea.getPrivateChatUser();
+        boolean isViewingThisChat = contentArea.isPrivateMode()
+                && privateChatUser != null
+                && privateChatUser.getId().equals(message.getSenderId());
+
+        // Show notification if not viewing this chat or window not focused
+        if (!isViewingThisChat || !notificationService.isWindowFocused()) {
+            String displayName = message.getSenderDisplayName() != null
+                    ? message.getSenderDisplayName()
+                    : message.getSenderUsername();
+            notificationService.showMessageNotification(displayName, message.getContent());
+
+            // Update unread badge for this friend in sidebar
+            Platform.runLater(() -> {
+                sidebar.incrementUnreadCount(message.getSenderId());
+            });
         }
     }
 

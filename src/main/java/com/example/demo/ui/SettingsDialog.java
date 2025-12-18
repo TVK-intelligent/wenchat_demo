@@ -2,6 +2,7 @@ package com.example.demo.ui;
 
 import com.example.demo.client.model.User;
 import com.example.demo.client.service.ChatService;
+import com.example.demo.client.service.NotificationService;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -40,14 +41,20 @@ public class SettingsDialog extends Stage {
     private static boolean isDarkTheme = false;
     private static Consumer<Boolean> themeChangeCallback;
 
+    // Notification settings
+    private CheckBox enableNotificationsCheckBox;
+    private CheckBox enableSoundCheckBox;
+    private Slider volumeSlider;
+    private Label volumeValueLabel;
+
     public SettingsDialog(ChatService chatService) {
         this.chatService = chatService;
 
         initModality(Modality.APPLICATION_MODAL);
         setTitle("⚙️ Cài đặt");
         setResizable(false);
-        setWidth(480);
-        setHeight(520);
+        setWidth(500);
+        setHeight(700);
 
         initComponents();
         loadCurrentSettings();
@@ -146,6 +153,9 @@ public class SettingsDialog extends Stage {
         // Profile section
         VBox profileSection = createSection("👤 Thông tin cá nhân", createProfileContent());
 
+        // Notification section
+        VBox notificationSection = createSection("🔔 Thông báo", createNotificationContent());
+
         // Privacy section
         VBox privacySection = createSection("🔒 Quyền riêng tư", createPrivacyContent());
 
@@ -171,11 +181,20 @@ public class SettingsDialog extends Stage {
                 titleBox,
                 appearanceSection,
                 profileSection,
+                notificationSection,
                 privacySection,
                 statusBox,
                 buttonBox);
 
-        return mainLayout;
+        // Wrap in ScrollPane for scrolling when content exceeds height
+        ScrollPane scrollPane = new ScrollPane(mainLayout);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setStyle("-fx-background-color: #ffffff; -fx-background: #ffffff;");
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+
+        VBox wrapper = new VBox(scrollPane);
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
+        return wrapper;
     }
 
     private VBox createSection(String title, VBox content) {
@@ -233,6 +252,75 @@ public class SettingsDialog extends Stage {
                 displayNameLabel, displayNameField,
                 avatarBox);
 
+        return content;
+    }
+
+    private VBox createNotificationContent() {
+        VBox content = new VBox(12);
+
+        // Get current settings from NotificationService
+        NotificationService notificationService = NotificationService.getInstance();
+
+        enableNotificationsCheckBox = new CheckBox("Bật thông báo desktop");
+        enableNotificationsCheckBox.setSelected(notificationService.isGlobalEnabled());
+        enableNotificationsCheckBox.setStyle("-fx-font-size: 13px;");
+
+        enableSoundCheckBox = new CheckBox("Bật âm thanh thông báo");
+        enableSoundCheckBox.setSelected(notificationService.isSoundEnabled());
+        enableSoundCheckBox.setStyle("-fx-font-size: 13px;");
+
+        // Volume slider
+        HBox volumeBox = new HBox(12);
+        volumeBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label volumeLabel = new Label("🔊 Âm lượng:");
+        volumeLabel.setStyle("-fx-font-size: 13px;");
+
+        volumeSlider = new Slider(0, 100, notificationService.getVolume());
+        volumeSlider.setPrefWidth(150);
+        volumeSlider.setShowTickMarks(false);
+        volumeSlider.setShowTickLabels(false);
+        HBox.setHgrow(volumeSlider, Priority.ALWAYS);
+
+        volumeValueLabel = new Label(notificationService.getVolume() + "%");
+        volumeValueLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-min-width: 45px;");
+
+        // Test button for volume
+        Button testSoundButton = new Button("🔔 Test");
+        testSoundButton.setStyle(
+                "-fx-background-color: #f0f2f5; -fx-text-fill: #667eea; " +
+                        "-fx-font-weight: bold; -fx-padding: 6 12; -fx-border-color: #667eea; " +
+                        "-fx-border-radius: 15; -fx-background-radius: 15; -fx-cursor: hand; -fx-font-size: 11px;");
+        testSoundButton.setOnAction(e -> notificationService.playNotificationSound(
+                NotificationService.NotificationType.MESSAGE));
+
+        volumeBox.getChildren().addAll(volumeLabel, volumeSlider, volumeValueLabel, testSoundButton);
+
+        // Add event handlers to update NotificationService
+        enableNotificationsCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            notificationService.setGlobalEnabled(newVal);
+        });
+
+        enableSoundCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            notificationService.setSoundEnabled(newVal);
+            volumeSlider.setDisable(!newVal);
+            testSoundButton.setDisable(!newVal);
+        });
+
+        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            int vol = newVal.intValue();
+            volumeValueLabel.setText(vol + "%");
+            notificationService.setVolume(vol);
+        });
+
+        // Initial state
+        volumeSlider.setDisable(!notificationService.isSoundEnabled());
+        testSoundButton.setDisable(!notificationService.isSoundEnabled());
+
+        Label hintLabel = new Label("💡 Thông báo sẽ hiển thị khi ứng dụng không được focus");
+        hintLabel.setStyle("-fx-text-fill: #888; -fx-font-size: 11px;");
+
+        content.getChildren().addAll(enableNotificationsCheckBox, enableSoundCheckBox, volumeBox, hintLabel);
         return content;
     }
 
