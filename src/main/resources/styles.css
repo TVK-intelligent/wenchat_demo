@@ -50,30 +50,27 @@
 /* ============================================
    Dark Theme
    ============================================ */
-/* ============================================
-   Dark Theme - Enhanced Visibility
-   ============================================ */
 .dark-theme {
-    --bg-primary: #1e1e2f;
-    --bg-secondary: #252538;
-    --bg-tertiary: #2d2d44;
-    --bg-chat: #1e1e2f;
-    --bg-sidebar: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
-    --bg-sidebar-hover: rgba(255,255,255,0.1);
-    --bg-sidebar-active: rgba(255,255,255,0.18);
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-tertiary: #0f3460;
+    --bg-chat: #1a1a2e;
+    --bg-sidebar: linear-gradient(180deg, #16213e 0%, #1a1a2e 100%);
+    --bg-sidebar-hover: rgba(255,255,255,0.08);
+    --bg-sidebar-active: rgba(255,255,255,0.15);
     
-    --text-primary: #ffffff;
-    --text-secondary: #e0e0e8;
-    --text-muted: #b8b8c8;
+    --text-primary: #e4e6eb;
+    --text-secondary: #b0b3b8;
+    --text-muted: #8a8d91;
     
-    --border-color: #404060;
-    --border-light: rgba(255,255,255,0.15);
+    --border-color: #3a3a5c;
+    --border-light: rgba(255,255,255,0.1);
     
     --message-mine: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --message-others: #3a3a55;
+    --message-others: #2d2d44;
     
-    --shadow-sm: 0 2px 4px rgba(0,0,0,0.4);
-    --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
 }
 
 /* ============================================
@@ -308,26 +305,19 @@
 .message-bubble.mine {
     -fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     -fx-background-radius: 18 18 4 18;
-    -fx-border-color: #5570d6;
-    -fx-border-width: 1.5;
-    -fx-border-radius: 18 18 4 18;
-    -fx-effect: dropshadow(gaussian, rgba(102,126,234,0.35), 8, 0, 0, 3);
 }
 
 .message-bubble.others {
     -fx-background-color: #ffffff;
     -fx-background-radius: 18 18 18 4;
-    -fx-border-color: #c5c9d0;
-    -fx-border-width: 1.5;
+    -fx-border-color: #e9ecef;
+    -fx-border-width: 1;
     -fx-border-radius: 18 18 18 4;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 6, 0, 0, 2);
 }
 
 .dark-theme .message-bubble.others {
-    -fx-background-color: #3a3a55;
-    -fx-border-color: #5a5a7a;
-    -fx-border-width: 1.5;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 8, 0, 0, 2);
+    -fx-background-color: #2d2d44;
+    -fx-border-color: #3a3a5c;
 }
 
 /* Message Text */
@@ -345,7 +335,7 @@
 }
 
 .dark-theme .message-text.others {
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: #e4e6eb;
 }
 
 /* Message Sender Name */
@@ -357,7 +347,7 @@
 }
 
 .dark-theme .message-sender {
-    -fx-text-fill: #e0e0f0;
+    -fx-text-fill: #b0b3b8;
 }
 
 /* Message Time */
@@ -551,63 +541,6 @@
 
 .bg-transparent {
     -fx-background-color: transparent;
-}
-
-/* ============================================
-   SLIDER STYLES (Volume Control)
-   ============================================ */
-.slider {
-    -fx-show-tick-marks: false;
-    -fx-show-tick-labels: false;
-}
-
-.slider .track {
-    -fx-background-color: #dee2e6;
-    -fx-background-radius: 5px;
-    -fx-pref-height: 6px;
-}
-
-.slider .thumb {
-    -fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -fx-background-radius: 50%;
-    -fx-pref-width: 18px;
-    -fx-pref-height: 18px;
-    -fx-effect: dropshadow(gaussian, rgba(102,126,234,0.4), 4, 0, 0, 1);
-    -fx-cursor: hand;
-}
-
-.slider .thumb:hover {
-    -fx-scale-x: 1.1;
-    -fx-scale-y: 1.1;
-}
-
-.dark-theme .slider .track {
-    -fx-background-color: #404060;
-}
-
-.dark-theme .slider .thumb {
-    -fx-background-color: linear-gradient(135deg, #7689f0 0%, #8a5bb8 100%);
-}
-
-/* ============================================
-   DARK THEME - Settings Dialog Sections
-   ============================================ */
-.dark-theme .settings-section {
-    -fx-background-color: #2d2d44;
-    -fx-border-color: #404060;
-}
-
-.dark-theme .settings-section .label {
-    -fx-text-fill: #f0f0f5;
-}
-
-.dark-theme .settings-section .check-box {
-    -fx-text-fill: #f0f0f5;
-}
-
-.dark-theme .settings-section .check-box .box {
-    -fx-background-color: #353550;
-    -fx-border-color: #505070;
 }
 
 /* ============================================

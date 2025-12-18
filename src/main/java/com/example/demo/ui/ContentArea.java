@@ -647,6 +647,17 @@ public class ContentArea extends BorderPane {
             return;
         }
 
+        // Prepend default server URL if relative path
+        String fullUrl = fileUrl;
+        if (!fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")) {
+            // Use default server URL or get from config
+            String serverUrl = System.getenv("WEBCHAT_G10_SERVER_URL");
+            if (serverUrl == null || serverUrl.isEmpty()) {
+                serverUrl = "http://26.6.143.150:8081"; // Default server
+            }
+            fullUrl = serverUrl + fileUrl;
+        }
+
         // Get the Downloads folder path
         String userHome = System.getProperty("user.home");
         File downloadsFolder = new File(userHome, "Downloads");
@@ -676,6 +687,7 @@ public class ContentArea extends BorderPane {
 
         // Create final reference for use in lambda
         final File finalSaveFile = saveFile;
+        final String finalFileUrl = fullUrl;
 
         // Disable button and show downloading state
         String originalText = downloadBtn.getText();
@@ -689,7 +701,7 @@ public class ContentArea extends BorderPane {
             protected Boolean call() throws Exception {
                 HttpURLConnection conn = null;
                 try {
-                    URL url = new URL(fileUrl);
+                    URL url = new URL(finalFileUrl);
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
                     conn.setConnectTimeout(10000);
