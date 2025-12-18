@@ -54,6 +54,10 @@ public class RoomManagementDialog extends Stage {
     // Callback for room selection
     private Consumer<ChatRoom> onRoomSelected;
 
+    private Button createBeautifulButton(String icon, String text, String bgColor) {
+        return Sidebar.createBeautifulButton(icon, text, bgColor);
+    }
+
     public RoomManagementDialog(ChatService chatService) {
         this.chatService = chatService;
 
@@ -105,28 +109,18 @@ public class RoomManagementDialog extends Stage {
         privateRoomCheckBox = new CheckBox("🔒 Phòng riêng tư");
         privateRoomCheckBox.setStyle("-fx-font-size: 13px;");
 
-        createRoomButton = new Button("➕ Tạo Phòng");
-        createRoomButton.getStyleClass().add("room-create-button");
+        createRoomButton = createBeautifulButton("➕", "Tạo Phòng", "#4ade80");
 
         // Join room
-        joinRoomButton = new Button("🚪 Tham Gia Phòng");
-        joinRoomButton.setStyle(
-                "-fx-background-color: #4ade80; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        joinRoomButton = createBeautifulButton("🚪", "Tham Gia Phòng", "#667eea");
         joinRoomButton.setDisable(true);
 
         // Delete room
-        deleteRoomButton = new Button("🗑️ Xóa Phòng");
-        deleteRoomButton.setStyle(
-                "-fx-background-color: #f87171; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        deleteRoomButton = createBeautifulButton("🗑️", "Xóa Phòng", "#f87171");
         deleteRoomButton.setDisable(true);
 
         // Leave room
-        leaveRoomButton = new Button("🚪 Rời Phòng");
-        leaveRoomButton.setStyle(
-                "-fx-background-color: #fb923c; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        leaveRoomButton = createBeautifulButton("🚪", "Rời Phòng", "#fb923c");
         leaveRoomButton.setDisable(true);
 
         // Invite friends
@@ -139,8 +133,7 @@ public class RoomManagementDialog extends Stage {
         inviteRoomSelector.setStyle("-fx-background-radius: 20;");
         inviteRoomSelector.setPrefWidth(300);
 
-        inviteButton = new Button("📨 Gửi Lời Mời");
-        inviteButton.getStyleClass().add("room-invite-button");
+        inviteButton = createBeautifulButton("📨", "Gửi Lời Mời", "#8b5cf6");
         inviteButton.setDisable(true);
     }
 
@@ -199,16 +192,10 @@ public class RoomManagementDialog extends Stage {
         HBox buttonBox = new HBox(12);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
-        Button refreshButton = new Button("🔄 Làm mới");
-        refreshButton.setStyle(
-                "-fx-background-color: #4ade80; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        Button refreshButton = createBeautifulButton("🔄", "Làm mới", "#4ade80");
         refreshButton.setOnAction(e -> refreshData());
 
-        Button closeButton = new Button("Đóng");
-        closeButton.setStyle(
-                "-fx-background-color: #6c757d; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 10 25; -fx-background-radius: 20; -fx-cursor: hand;");
+        Button closeButton = createBeautifulButton("", "Đóng", "#6c757d");
         closeButton.setOnAction(e -> close());
 
         buttonBox.getChildren().addAll(refreshButton, closeButton);
@@ -251,10 +238,7 @@ public class RoomManagementDialog extends Stage {
         HBox buttonBox = new HBox(10);
         buttonBox.setAlignment(Pos.CENTER_LEFT);
 
-        Button selectButton = new Button("✔️ Chọn Phòng");
-        selectButton.setStyle(
-                "-fx-background-color: #667eea; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        Button selectButton = createBeautifulButton("✔️", "Chọn Phòng", "#667eea");
         selectButton.setDisable(true);
         selectButton.setOnAction(e -> {
             ChatRoom selected = myRoomsList.getSelectionModel().getSelectedItem();

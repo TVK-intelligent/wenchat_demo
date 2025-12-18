@@ -98,16 +98,10 @@ public class MessageHistoryDialog extends Stage {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button refreshButton = new Button("🔄 Làm mới");
-        refreshButton.setStyle(
-                "-fx-background-color: #4ade80; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 8 16; -fx-background-radius: 20; -fx-cursor: hand;");
+        Button refreshButton = Sidebar.createBeautifulButton("🔄", "Làm mới", "#667eea");
         refreshButton.setOnAction(e -> loadMessageHistory());
 
-        Button closeButton = new Button("Đóng");
-        closeButton.setStyle(
-                "-fx-background-color: #6c757d; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 8 16; -fx-background-radius: 20; -fx-cursor: hand;");
+        Button closeButton = Sidebar.createBeautifulButton("", "Đóng", "#667eea");
         closeButton.setOnAction(e -> close());
 
         headerBox.getChildren().addAll(titleLabel, spacer, refreshButton, closeButton);

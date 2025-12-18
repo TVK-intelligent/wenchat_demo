@@ -23,10 +23,12 @@ import lombok.Setter;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.function.Consumer;
 
 import de.jensd.fx.glyphs.fontawesome.FontAwesomeIcon;
@@ -71,9 +73,40 @@ public class ContentArea extends BorderPane {
             Color.web("#a8edea"), Color.web("#ff9a9e"), Color.web("#fbc2eb")
     };
 
+    // Store message data for theme switching
+    private static class MessageData {
+        String user;
+        String message;
+        LocalDateTime timestamp;
+        boolean isMine;
+        boolean isFile;
+        String fileName;
+        String fileUrl;
+
+        MessageData(String user, String message, LocalDateTime timestamp, boolean isMine) {
+            this.user = user;
+            this.message = message;
+            this.timestamp = timestamp;
+            this.isMine = isMine;
+            this.isFile = false;
+        }
+
+        MessageData(String user, String fileName, String fileUrl, LocalDateTime timestamp, boolean isMine) {
+            this.user = user;
+            this.fileName = fileName;
+            this.fileUrl = fileUrl;
+            this.timestamp = timestamp;
+            this.isMine = isMine;
+            this.isFile = true;
+        }
+    }
+
+    private List<MessageData> messageHistory = new ArrayList<>();
+    private boolean isRefreshingMessages = false;
+
     public ContentArea() {
         getStyleClass().add("chat-container");
-        setStyle("-fx-background-color: #f0f2f5;");
+        setStyle("-fx-background-color: #fafbfc;");
 
         // Create main chat area
         createChatArea();
@@ -90,9 +123,22 @@ public class ContentArea extends BorderPane {
         // Header with room selector and status
         HBox header = createHeader();
 
-        // Message list
+        // Message list - hỗ trợ dark/light mode
         messageListView = new ListView<>();
-        messageListView.getStyleClass().add("chat-list-view");
+        // Check if dark mode is enabled
+        boolean isDarkMode = getStyleClass().contains("dark-theme") ||
+                (getParent() != null && getParent().getStyleClass().contains("dark-theme"));
+        if (isDarkMode) {
+            messageListView.setStyle(
+                    "-fx-background-color: linear-gradient(to bottom, #1f2937 0%, #374151 100%); " +
+                    "-fx-background-radius: 0; " +
+                    "-fx-border-color: transparent;");
+        } else {
+            messageListView.setStyle(
+                    "-fx-background-color: linear-gradient(to bottom, #fafbfc 0%, #f1f5f9 100%); " +
+                    "-fx-background-radius: 0; " +
+                    "-fx-border-color: transparent;");
+        }
         messageListView.setCellFactory(param -> new MessageCell());
         VBox.setVgrow(messageListView, Priority.ALWAYS);
 
@@ -169,44 +215,71 @@ public class ContentArea extends BorderPane {
     }
 
     private void createInputArea() {
+        // Check if dark mode is enabled
+        boolean isDarkMode = getStyleClass().contains("dark-theme") ||
+                (getParent() != null && getParent().getStyleClass().contains("dark-theme"));
+
         HBox inputContainer = new HBox(12);
-        inputContainer.getStyleClass().add("content-area-input-box");
         inputContainer.setAlignment(Pos.CENTER);
-        inputContainer.setPadding(new Insets(15, 20, 15, 20));
+        inputContainer.setPadding(new Insets(18, 24, 18, 24));
+        inputContainer.setStyle(
+                "-fx-background-color: " + (isDarkMode ? "#1f2937" : "#fafbfc") + "; " +
+                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 6, 0, 0, 2);");
 
         // Emoji button with picker
         Button emojiBtn = new Button("😊");
         emojiBtn.setStyle(
-                "-fx-background-color: transparent; -fx-font-size: 18px; " +
-                        "-fx-cursor: hand; -fx-padding: 5;");
+                "-fx-background-color: " + (isDarkMode ? "#374151" : "#f0f2f5") + "; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;");
+        emojiBtn.setOnMouseEntered(e -> emojiBtn.setStyle(
+                "-fx-background-color: " + (isDarkMode ? "#4b5563" : "#e4e6eb") + "; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;"));
+        emojiBtn.setOnMouseExited(e -> emojiBtn.setStyle(
+                "-fx-background-color: " + (isDarkMode ? "#374151" : "#f0f2f5") + "; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;"));
         emojiBtn.setOnAction(e -> showEmojiPicker(emojiBtn));
 
         inputField = new TextField();
         inputField.setPromptText("Nhập tin nhắn...");
-        inputField.getStyleClass().add("chat-input-field");
+        inputField.setStyle(
+                "-fx-background-color: " + (isDarkMode ? "#374151" : "#f8fafc") + "; " +
+                "-fx-border-color: " + (isDarkMode ? "#6b7280" : "#e2e8f0") + "; " +
+                        "-fx-border-radius: 25; -fx-background-radius: 25; " +
+                        "-fx-padding: 14 22; -fx-font-size: 16px; " +
+                        "-fx-text-fill: " + (isDarkMode ? "#f9fafb" : "#1a202c") + "; " +
+                        "-fx-prompt-text-fill: " + (isDarkMode ? "#9ca3af" : "#718096") + "; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 3, 0, 0, 1);");
         HBox.setHgrow(inputField, Priority.ALWAYS);
 
         // File button with FontAwesome icon
         FontAwesomeIconView paperclipIcon = new FontAwesomeIconView(FontAwesomeIcon.PAPERCLIP);
         paperclipIcon.setSize("16");
-        paperclipIcon.setStyleClass("fa-icon");
+        paperclipIcon.setStyle("-fx-fill: #667eea;");
         fileButton = new Button();
         fileButton.setGraphic(paperclipIcon);
-        fileButton.getStyleClass().add("file-button");
-        fileButton.setPrefWidth(45);
-        fileButton.setPrefHeight(40);
+        fileButton.setStyle(
+                "-fx-background-color: " + (isDarkMode ? "#374151" : "#f0f2f5") + "; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand;");
+        fileButton.setOnMouseEntered(e -> fileButton.setStyle(
+                "-fx-background-color: " + (isDarkMode ? "#4b5563" : "#e4e6eb") + "; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand;"));
+        fileButton.setOnMouseExited(e -> fileButton.setStyle(
+                "-fx-background-color: " + (isDarkMode ? "#374151" : "#f0f2f5") + "; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand;"));
 
         // Send button with FontAwesome icon
         FontAwesomeIconView sendIcon = new FontAwesomeIconView(FontAwesomeIcon.PAPER_PLANE);
         sendIcon.setSize("16");
-        sendIcon.setStyleClass("fa-icon");
         sendIcon.setStyle("-fx-fill: white;");
-        sendButton = new Button("Gửi ");
+        sendButton = Sidebar.createBeautifulButton("Gửi", "", "#667eea");
         sendButton.setGraphic(sendIcon);
         sendButton.setContentDisplay(javafx.scene.control.ContentDisplay.RIGHT);
-        sendButton.setPrefWidth(100);
-        sendButton.setPrefHeight(40);
-        sendButton.getStyleClass().add("send-button");
 
         inputContainer.getChildren().addAll(emojiBtn, inputField, fileButton, sendButton);
         setBottom(inputContainer);
@@ -324,12 +397,17 @@ public class ContentArea extends BorderPane {
     }
 
     public void addMessage(String user, String message, LocalDateTime timestamp, boolean isMine) {
+        // Store message data for theme switching (only if not refreshing)
+        if (!isRefreshingMessages) {
+            messageHistory.add(new MessageData(user, message, timestamp, isMine));
+        }
+
         // Check if dark mode is enabled
         boolean isDarkMode = getStyleClass().contains("dark-theme") ||
                 (getParent() != null && getParent().getStyleClass().contains("dark-theme"));
 
-        HBox alignmentBox = new HBox(10);
-        alignmentBox.setPadding(new Insets(2, 10, 2, 10));
+        HBox alignmentBox = new HBox(12);
+        alignmentBox.setPadding(new Insets(12, 20, 12, 20));
 
         // Create avatar
         StackPane avatar = createAvatar(user, isMine);
@@ -337,59 +415,74 @@ public class ContentArea extends BorderPane {
         VBox messageContainer = new VBox(2);
         messageContainer.setMaxWidth(400);
 
-        // Sender Name (Only show for others)
+        // Sender Name (Only show for others) - hỗ trợ dark/light mode
         if (!isMine) {
             Label userLabel = new Label(user);
-            userLabel.getStyleClass().add("message-sender");
-            // Apply dark mode style directly if needed
-            if (isDarkMode) {
-                userLabel.setStyle("-fx-text-fill: #e0e0e5; -fx-font-weight: bold; -fx-font-size: 12px;");
-            }
+            userLabel.setStyle(
+                    "-fx-font-weight: 600; " +
+                    "-fx-font-size: 14px; " +
+                    "-fx-font-family: 'Segoe UI', sans-serif; " +
+                    (isDarkMode ? "-fx-text-fill: white;" : "-fx-text-fill: #4a5568;") + " " +
+                    "-fx-padding: 0 0 6 0;");
             messageContainer.getChildren().add(userLabel);
         }
 
-        // Message Bubble
+        // Message Bubble với design đẹp hơn - hỗ trợ dark/light mode
         VBox bubble = new VBox(4);
-        bubble.getStyleClass().add("message-bubble");
-        bubble.getStyleClass().add(isMine ? "mine" : "others");
-        bubble.setPadding(new Insets(10, 14, 10, 14));
+        bubble.setPadding(new Insets(16, 18, 16, 18));
+        bubble.setMaxWidth(450);
 
-        // Apply dark mode bubble style for others' messages
-        if (!isMine && isDarkMode) {
-            bubble.setStyle("-fx-background-color: #2d2d44; -fx-background-radius: 20 20 20 6; " +
-                    "-fx-border-color: #4a4a6a; -fx-border-width: 1.5; -fx-border-radius: 20 20 20 6;");
+        // Style cho bubble với gradient và shadow - cải thiện độ tương phản
+        if (isMine) {
+            if (isDarkMode) {
+                bubble.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); " +
+                                "-fx-background-radius: 18 18 4 18; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(59,130,246,0.5), 12, 0, 0, 4);");
+            } else {
+                bubble.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); " +
+                                "-fx-background-radius: 18 18 4 18; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(30,64,175,0.4), 10, 0, 0, 4);");
+            }
+        } else {
+            if (isDarkMode) {
+                bubble.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #e5e7eb 0%, #f9fafb 100%); " +
+                                "-fx-background-radius: 18 18 18 4; " +
+                                "-fx-border-color: #d1d5db; -fx-border-width: 1.5; -fx-border-radius: 18 18 18 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 8, 0, 0, 3);");
+            } else {
+                bubble.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); " +
+                                "-fx-background-radius: 18 18 18 4; " +
+                                "-fx-border-color: #e2e8f0; -fx-border-width: 1.5; -fx-border-radius: 18 18 18 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 8, 0, 0, 3);");
+            }
         }
 
         Label messageLabel = new Label(message);
         messageLabel.setWrapText(true);
-        messageLabel.setMaxWidth(370);
-        messageLabel.getStyleClass().add("message-text");
-        messageLabel.getStyleClass().add(isMine ? "mine" : "others");
-
-        // Apply text color directly for dark mode to ensure visibility
-        if (isMine) {
-            messageLabel.setStyle("-fx-text-fill: white; -fx-font-size: 14.5px;");
-        } else if (isDarkMode) {
-            messageLabel.setStyle("-fx-text-fill: #ffffff; -fx-font-size: 14.5px;");
-        } else {
-            messageLabel.setStyle("-fx-text-fill: #1a202c; -fx-font-size: 14.5px;");
-        }
+        messageLabel.setMaxWidth(400);
+        messageLabel.setStyle(
+                "-fx-font-size: 16px; " +
+                "-fx-font-family: 'Segoe UI', 'Helvetica Neue', 'Arial', sans-serif; " +
+                "-fx-line-spacing: 1.4; " +
+                "-fx-font-weight: 400; " +
+                (isDarkMode ? "-fx-text-fill: white;" : "-fx-text-fill: #1a202c;") + " " +
+                "-fx-padding: 2 0 2 0;");
 
         Label timeLabel = new Label(timestamp.format(DateTimeFormatter.ofPattern("HH:mm")));
-        timeLabel.getStyleClass().add("message-time");
-        timeLabel.getStyleClass().add(isMine ? "mine" : "others");
-
-        // Apply time label style directly
-        if (isMine) {
-            timeLabel.setStyle("-fx-text-fill: rgba(255,255,255,0.85); -fx-font-size: 10.5px;");
-        } else if (isDarkMode) {
-            timeLabel.setStyle("-fx-text-fill: #a8b0c0; -fx-font-size: 10.5px;");
-        } else {
-            timeLabel.setStyle("-fx-text-fill: #718096; -fx-font-size: 10.5px;");
-        }
+        timeLabel.setStyle(
+                "-fx-font-size: 12px; " +
+                "-fx-font-weight: 500; " +
+                "-fx-font-family: 'Segoe UI', sans-serif; " +
+                (isDarkMode ? "-fx-text-fill: rgba(255,255,255,0.8);" : "-fx-text-fill: #718096;") + " " +
+                "-fx-padding: 4 0 0 0;");
 
         HBox timeBox = new HBox(timeLabel);
         timeBox.setAlignment(isMine ? Pos.BOTTOM_RIGHT : Pos.BOTTOM_LEFT);
+        timeBox.setPadding(new Insets(2, 0, 0, 0));
 
         bubble.getChildren().addAll(messageLabel, timeBox);
         messageContainer.getChildren().add(bubble);
@@ -424,24 +517,25 @@ public class ContentArea extends BorderPane {
     }
 
     /**
-     * Create avatar with user initial
+     * Create avatar with user initial - đẹp hơn
      */
     private StackPane createAvatar(String user, boolean isMine) {
-        Circle avatar = new Circle(18);
-        avatar.getStyleClass().add("message-avatar");
+        Circle avatar = new Circle(20);
+        avatar.setEffect(new DropShadow(6, Color.web("#00000025")));
 
         // Get consistent color for user
         Color avatarColor = getAvatarColor(user);
-        avatar.setFill(avatarColor);
+        avatar.setFill(new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, avatarColor),
+                new Stop(1, avatarColor.darker())));
 
         String initial = user.length() > 0 ? user.substring(0, 1).toUpperCase() : "?";
         Label initialLabel = new Label(initial);
-        initialLabel.getStyleClass().add("avatar-initial");
-        initialLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 12px;");
+        initialLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 13px;");
 
         StackPane avatarPane = new StackPane(avatar, initialLabel);
-        avatarPane.setMinSize(36, 36);
-        avatarPane.setMaxSize(36, 36);
+        avatarPane.setMinSize(40, 40);
+        avatarPane.setMaxSize(40, 40);
 
         return avatarPane;
     }
@@ -464,6 +558,7 @@ public class ContentArea extends BorderPane {
 
     public void clearMessages() {
         messageListView.getItems().clear();
+        messageHistory.clear();
     }
 
     // Updated to accept current username to check ownership
@@ -500,6 +595,15 @@ public class ContentArea extends BorderPane {
     }
 
     public void addFileMessage(String user, String fileName, String fileUrl, LocalDateTime timestamp, boolean isMine) {
+        // Store message data for theme switching (only if not refreshing)
+        if (!isRefreshingMessages) {
+            messageHistory.add(new MessageData(user, fileName, fileUrl, timestamp, isMine));
+        }
+
+        // Check if dark mode is enabled
+        boolean isDarkMode = getStyleClass().contains("dark-theme") ||
+                (getParent() != null && getParent().getStyleClass().contains("dark-theme"));
+
         HBox alignmentBox = new HBox(10);
         alignmentBox.setPadding(new Insets(4, 15, 4, 15));
 
@@ -510,7 +614,12 @@ public class ContentArea extends BorderPane {
 
         if (!isMine) {
             Label userLabel = new Label(user);
-            userLabel.getStyleClass().add("message-sender");
+            userLabel.setStyle(
+                    "-fx-font-weight: 600; " +
+                    "-fx-font-size: 14px; " +
+                    "-fx-font-family: 'Segoe UI', sans-serif; " +
+                    (isDarkMode ? "-fx-text-fill: #f1f5f9;" : "-fx-text-fill: #4a5568;") + " " +
+                    "-fx-padding: 0 0 6 0;");
             messageContainer.getChildren().add(userLabel);
         }
 
@@ -521,16 +630,31 @@ public class ContentArea extends BorderPane {
         fileCard.setMaxWidth(320);
 
         if (isMine) {
-            fileCard.setStyle(
-                    "-fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%); " +
-                            "-fx-background-radius: 16 16 4 16; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(102,126,234,0.3), 8, 0, 0, 3);");
+            if (isDarkMode) {
+                fileCard.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); " +
+                                "-fx-background-radius: 16 16 4 16; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(59,130,246,0.5), 10, 0, 0, 4);");
+            } else {
+                fileCard.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%); " +
+                                "-fx-background-radius: 16 16 4 16; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(102,126,234,0.3), 8, 0, 0, 3);");
+            }
         } else {
-            fileCard.setStyle(
-                    "-fx-background-color: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); " +
-                            "-fx-background-radius: 16 16 16 4; " +
-                            "-fx-border-color: #94a3b8; -fx-border-width: 1.5; -fx-border-radius: 16 16 16 4; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 12, 0, 0, 4);");
+            if (isDarkMode) {
+                fileCard.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #4b5563 0%, #6b7280 100%); " +
+                                "-fx-background-radius: 16 16 16 4; " +
+                                "-fx-border-color: #9ca3af; -fx-border-width: 1; -fx-border-radius: 16 16 16 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.6), 12, 0, 0, 4);");
+            } else {
+                fileCard.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); " +
+                                "-fx-background-radius: 16 16 16 4; " +
+                                "-fx-border-color: #cbd5e1; -fx-border-width: 1.5; -fx-border-radius: 16 16 16 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 8, 0, 0, 3);");
+            }
         }
 
         // File icon with gradient background
@@ -558,13 +682,13 @@ public class ContentArea extends BorderPane {
 
         Label fileLabel = new Label(fileName);
         fileLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; " +
-                (isMine ? "-fx-text-fill: white;" : "-fx-text-fill: #212529;"));
+                (isMine ? "-fx-text-fill: white;" : (isDarkMode ? "-fx-text-fill: #f1f5f9;" : "-fx-text-fill: #212529;")));
         fileLabel.setWrapText(true);
         fileLabel.setMaxWidth(160);
 
         Label sizeLabel = new Label("📦 Tệp đính kèm");
         sizeLabel.setStyle("-fx-font-size: 11px; " +
-                (isMine ? "-fx-text-fill: rgba(255,255,255,0.75);" : "-fx-text-fill: #6c757d;"));
+                (isMine ? "-fx-text-fill: rgba(255,255,255,0.75);" : (isDarkMode ? "-fx-text-fill: #cbd5e1;" : "-fx-text-fill: #6c757d;")));
 
         fileInfo.getChildren().addAll(fileLabel, sizeLabel);
         HBox.setHgrow(fileInfo, Priority.ALWAYS);
@@ -614,7 +738,7 @@ public class ContentArea extends BorderPane {
         // Timestamp
         Label timeLabel = new Label(timestamp.format(DateTimeFormatter.ofPattern("HH:mm")));
         timeLabel.setStyle("-fx-font-size: 10px; -fx-padding: 3 0 0 0; " +
-                (isMine ? "-fx-text-fill: rgba(255,255,255,0.6);" : "-fx-text-fill: #9ca3af;"));
+                (isMine ? "-fx-text-fill: rgba(255,255,255,0.9);" : (isDarkMode ? "-fx-text-fill: #cbd5e1;" : "-fx-text-fill: #9ca3af;")));
 
         VBox contentBox = new VBox(4);
         contentBox.getChildren().addAll(fileCard, timeLabel);
@@ -734,7 +858,7 @@ public class ContentArea extends BorderPane {
             protected Boolean call() throws Exception {
                 HttpURLConnection conn = null;
                 try {
-                    URL url = new URL(finalFileUrl);
+                    URL url = URI.create(finalFileUrl).toURL();
                     conn = (HttpURLConnection) url.openConnection();
                     conn.setRequestMethod("GET");
                     conn.setConnectTimeout(10000);
@@ -1004,6 +1128,33 @@ public class ContentArea extends BorderPane {
             setStyle("-fx-background-color: #f0f2f5;");
             messageListView.setStyle("-fx-background-color: transparent;");
         }
+
+        // Refresh all messages with new theme
+        refreshAllMessages();
+    }
+
+    /**
+     * Refresh all messages with current theme
+     */
+    private void refreshAllMessages() {
+        isRefreshingMessages = true;
+
+        // Clear current messages
+        messageListView.getItems().clear();
+
+        // Re-add all messages with current theme
+        for (MessageData data : messageHistory) {
+            if (data.isFile) {
+                addFileMessage(data.user, data.fileName, data.fileUrl, data.timestamp, data.isMine);
+            } else {
+                addMessage(data.user, data.message, data.timestamp, data.isMine);
+            }
+        }
+
+        // Scroll to bottom to show latest messages
+        messageListView.scrollTo(messageListView.getItems().size() - 1);
+
+        isRefreshingMessages = false;
     }
 
     // Custom cell for messages

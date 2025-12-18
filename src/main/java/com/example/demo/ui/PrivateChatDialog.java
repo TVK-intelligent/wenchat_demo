@@ -88,18 +88,18 @@ public class PrivateChatDialog extends Stage {
                 "-fx-background-color: #f0f2f5; -fx-border-color: #dee2e6; " +
                         "-fx-border-radius: 25; -fx-background-radius: 25; -fx-padding: 12 20;");
 
-        sendButton = new Button("➤");
-        sendButton.setStyle(
-                "-fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%); " +
-                        "-fx-text-fill: white; -fx-font-size: 16px; " +
-                        "-fx-min-width: 45; -fx-min-height: 45; -fx-max-width: 45; -fx-max-height: 45; " +
-                        "-fx-background-radius: 50; -fx-cursor: hand;");
+        sendButton = Sidebar.createBeautifulButton("➤", "", "#667eea");
+        sendButton.setMinWidth(45);
+        sendButton.setMaxWidth(45);
+        sendButton.setMinHeight(45);
+        sendButton.setMaxHeight(45);
 
-        fileButton = new Button("📎");
-        fileButton.setStyle(
-                "-fx-background-color: #f0f2f5; -fx-text-fill: #667eea; " +
-                        "-fx-min-width: 40; -fx-min-height: 40; -fx-max-width: 40; -fx-max-height: 40; " +
-                        "-fx-background-radius: 50; -fx-cursor: hand;");
+        fileButton = Sidebar.createBeautifulButton("📎", "", "#f0f2f5");
+        fileButton.setMinWidth(40);
+        fileButton.setMaxWidth(40);
+        fileButton.setMinHeight(40);
+        fileButton.setMaxHeight(40);
+        fileButton.setStyle(fileButton.getStyle() + "-fx-text-fill: #667eea;");
 
         statusLabel = new Label("Online");
         statusLabel.setStyle("-fx-text-fill: #4ade80; -fx-font-size: 11px;");
@@ -178,11 +178,12 @@ public class PrivateChatDialog extends Stage {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         // Close button
-        Button closeButton = new Button("✕");
-        closeButton.setStyle(
-                "-fx-background-color: #f0f2f5; -fx-text-fill: #6c757d; " +
-                        "-fx-min-width: 35; -fx-min-height: 35; -fx-max-width: 35; -fx-max-height: 35; " +
-                        "-fx-background-radius: 50; -fx-cursor: hand;");
+        Button closeButton = Sidebar.createBeautifulButton("✕", "", "#f0f2f5");
+        closeButton.setMinWidth(35);
+        closeButton.setMaxWidth(35);
+        closeButton.setMinHeight(35);
+        closeButton.setMaxHeight(35);
+        closeButton.setStyle(closeButton.getStyle() + "-fx-text-fill: #6c757d;");
         closeButton.setOnAction(e -> hide());
 
         header.getChildren().addAll(avatarPane, userInfo, spacer, closeButton);

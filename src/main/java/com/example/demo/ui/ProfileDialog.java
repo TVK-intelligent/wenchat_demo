@@ -82,16 +82,13 @@ public class ProfileDialog extends Stage {
         joinDateLabel = new Label();
         joinDateLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
 
-        addFriendButton = new Button("➕ Kết bạn");
-        addFriendButton.getStyleClass().addAll("profile-button", "add-friend-button");
+        addFriendButton = Sidebar.createBeautifulButton("➕", "Kết bạn", "#4ade80");
         addFriendButton.setVisible(!isOwnProfile);
 
-        messageButton = new Button("💬 Nhắn tin");
-        messageButton.getStyleClass().add("profile-button");
+        messageButton = Sidebar.createBeautifulButton("💬", "Nhắn tin", "#667eea");
         messageButton.setVisible(!isOwnProfile);
 
-        editButton = new Button("✏️ Chỉnh sửa");
-        editButton.getStyleClass().addAll("profile-button", "edit-button");
+        editButton = Sidebar.createBeautifulButton("✏️", "Chỉnh sửa", "#fb923c");
         editButton.setVisible(isOwnProfile);
     }
 
@@ -141,10 +138,7 @@ public class ProfileDialog extends Stage {
         HBox bottomBox = new HBox();
         bottomBox.setAlignment(Pos.CENTER_RIGHT);
 
-        Button closeButton = new Button("Đóng");
-        closeButton.setStyle(
-                "-fx-background-color: #6c757d; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 10 25; -fx-background-radius: 20; -fx-cursor: hand;");
+        Button closeButton = Sidebar.createBeautifulButton("", "Đóng", "#6c757d");
         closeButton.setOnAction(e -> close());
 
         bottomBox.getChildren().add(closeButton);

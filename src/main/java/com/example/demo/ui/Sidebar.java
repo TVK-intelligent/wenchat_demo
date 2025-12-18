@@ -260,25 +260,8 @@ public class Sidebar extends VBox {
         friendsListView.setPlaceholder(new Label("👋 Chưa có bạn bè.\nVào Friends để thêm bạn!"));
         VBox.setVgrow(friendsListView, Priority.ALWAYS);
 
-        // Add new room button with icon
-        addRoomButton = new Button("➕ Tạo phòng mới");
+        addRoomButton = Sidebar.createBeautifulButton("➕", "Tạo phòng mới", "#667eea");
         addRoomButton.setMaxWidth(Double.MAX_VALUE);
-        addRoomButton.setStyle(
-                "-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); " +
-                        "-fx-text-fill: white; -fx-font-size: 13px; -fx-font-weight: bold; " +
-                        "-fx-padding: 12 20; -fx-background-radius: 12; -fx-cursor: hand; " +
-                        "-fx-effect: dropshadow(gaussian, rgba(17,153,142,0.4), 8, 0, 0, 3);");
-        addRoomButton.setOnMouseEntered(e -> addRoomButton.setStyle(
-                "-fx-background-color: linear-gradient(to right, #38ef7d, #11998e); " +
-                        "-fx-text-fill: white; -fx-font-size: 13px; -fx-font-weight: bold; " +
-                        "-fx-padding: 12 20; -fx-background-radius: 12; -fx-cursor: hand; " +
-                        "-fx-scale-x: 1.02; -fx-scale-y: 1.02; " +
-                        "-fx-effect: dropshadow(gaussian, rgba(56,239,125,0.5), 12, 0, 0, 3);"));
-        addRoomButton.setOnMouseExited(e -> addRoomButton.setStyle(
-                "-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); " +
-                        "-fx-text-fill: white; -fx-font-size: 13px; -fx-font-weight: bold; " +
-                        "-fx-padding: 12 20; -fx-background-radius: 12; -fx-cursor: hand; " +
-                        "-fx-effect: dropshadow(gaussian, rgba(17,153,142,0.4), 8, 0, 0, 3);"));
         addRoomButton.setOnAction(e -> {
             if (onAddRoomClicked != null)
                 onAddRoomClicked.accept(null);
@@ -775,5 +758,32 @@ public class Sidebar extends VBox {
                 setStyle("-fx-background-color: transparent; -fx-padding: 3 0 3 0;");
             }
         }
+    }
+
+    /**
+     * Tạo nút đẹp với hiệu ứng hover cho toàn bộ ứng dụng
+     */
+    public static Button createBeautifulButton(String icon, String text, String bgColor) {
+        Button btn = new Button(icon + (text.isEmpty() ? "" : " " + text));
+        btn.setStyle(
+                "-fx-background-color: " + bgColor + "; " +
+                        "-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; " +
+                        "-fx-min-width: 120; -fx-min-height: 45; -fx-max-width: 200; -fx-max-height: 45; " +
+                        "-fx-background-radius: 22; -fx-cursor: hand; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 8, 0, 0, 3);");
+        btn.setOnMouseEntered(e -> btn.setStyle(
+                "-fx-background-color: derive(" + bgColor + ", 20%); " +
+                        "-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; " +
+                        "-fx-min-width: 120; -fx-min-height: 45; -fx-max-width: 200; -fx-max-height: 45; " +
+                        "-fx-background-radius: 22; -fx-cursor: hand; " +
+                        "-fx-scale-x: 1.05; -fx-scale-y: 1.05; " +
+                        "-fx-effect: dropshadow(gaussian, " + bgColor + ", 15, 0.5, 0, 0);"));
+        btn.setOnMouseExited(e -> btn.setStyle(
+                "-fx-background-color: " + bgColor + "; " +
+                        "-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold; " +
+                        "-fx-min-width: 120; -fx-min-height: 45; -fx-max-width: 200; -fx-max-height: 45; " +
+                        "-fx-background-radius: 22; -fx-cursor: hand; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 8, 0, 0, 3);"));
+        return btn;
     }
 }

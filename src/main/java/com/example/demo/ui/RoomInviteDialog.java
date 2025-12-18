@@ -97,16 +97,10 @@ public class RoomInviteDialog extends Stage {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        Button refreshButton = new Button("🔄 Làm mới");
-        refreshButton.setStyle(
-                "-fx-background-color: #4ade80; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 8 16; -fx-background-radius: 20; -fx-cursor: hand;");
+        Button refreshButton = Sidebar.createBeautifulButton("🔄", "Làm mới", "#4ade80");
         refreshButton.setOnAction(e -> loadInvites());
 
-        Button closeButton = new Button("Đóng");
-        closeButton.setStyle(
-                "-fx-background-color: #6c757d; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 8 16; -fx-background-radius: 20; -fx-cursor: hand;");
+        Button closeButton = Sidebar.createBeautifulButton("", "Đóng", "#6c757d");
         closeButton.setOnAction(e -> close());
 
         headerBox.getChildren().addAll(titleLabel, spacer, refreshButton, closeButton);
@@ -187,12 +181,10 @@ public class RoomInviteDialog extends Stage {
             roomTypeLabel = new Label();
             roomTypeLabel.getStyleClass().add("invite-details");
 
-            acceptButton = new Button("✅ Chấp nhận");
-            acceptButton.getStyleClass().add("accept-button");
+            acceptButton = Sidebar.createBeautifulButton("✅", "Chấp nhận", "#4ade80");
             acceptButton.setOnAction(e -> handleAccept(getItem()));
 
-            declineButton = new Button("❌ Từ chối");
-            declineButton.getStyleClass().add("decline-button");
+            declineButton = Sidebar.createBeautifulButton("❌", "Từ chối", "#f87171");
             declineButton.setOnAction(e -> handleDecline(getItem()));
 
             buttonBox = new HBox(10);

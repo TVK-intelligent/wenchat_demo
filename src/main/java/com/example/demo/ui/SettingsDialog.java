@@ -97,11 +97,9 @@ public class SettingsDialog extends Stage {
         showOnlineStatusCheckBox = new CheckBox("Hiển thị trạng thái online");
         showOnlineStatusCheckBox.setStyle("-fx-font-size: 13px;");
 
-        saveButton = new Button("💾 Lưu thay đổi");
-        saveButton.getStyleClass().add("settings-save-button");
+        saveButton = Sidebar.createBeautifulButton("💾", "Lưu thay đổi", "#4ade80");
 
-        uploadAvatarButton = new Button("📷 Upload");
-        uploadAvatarButton.getStyleClass().add("settings-upload-button");
+        uploadAvatarButton = Sidebar.createBeautifulButton("📷", "Upload", "#667eea");
 
         avatarLabel = new Label("Không có ảnh đại diện");
         avatarLabel.setStyle("-fx-text-fill: #6c757d; -fx-font-size: 12px;");
@@ -162,8 +160,7 @@ public class SettingsDialog extends Stage {
         HBox buttonBox = new HBox(12);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
-        Button closeButton = new Button("Đóng");
-        closeButton.getStyleClass().add("settings-close-button");
+        Button closeButton = Sidebar.createBeautifulButton("", "Đóng", "#6c757d");
         closeButton.setOnAction(e -> close());
 
         buttonBox.getChildren().addAll(saveButton, closeButton);
@@ -277,11 +274,7 @@ public class SettingsDialog extends Stage {
         volumeValueLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; -fx-min-width: 45px;");
 
         // Test button for volume
-        Button testSoundButton = new Button("🔔 Test");
-        testSoundButton.setStyle(
-                "-fx-background-color: #fb923c; -fx-text-fill: white; " +
-                        "-fx-font-weight: bold; -fx-padding: 6 12; " +
-                        "-fx-border-radius: 15; -fx-background-radius: 15; -fx-cursor: hand; -fx-font-size: 11px;");
+        Button testSoundButton = Sidebar.createBeautifulButton("🔔", "Test", "#fb923c");
         testSoundButton.setOnAction(e -> notificationService.playNotificationSound(
                 NotificationService.NotificationType.MESSAGE));
 
