@@ -98,9 +98,15 @@ public class RoomInviteDialog extends Stage {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         Button refreshButton = new Button("🔄 Làm mới");
+        refreshButton.setStyle(
+                "-fx-background-color: #4ade80; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 8 16; -fx-background-radius: 20; -fx-cursor: hand;");
         refreshButton.setOnAction(e -> loadInvites());
 
         Button closeButton = new Button("Đóng");
+        closeButton.setStyle(
+                "-fx-background-color: #6c757d; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 8 16; -fx-background-radius: 20; -fx-cursor: hand;");
         closeButton.setOnAction(e -> close());
 
         headerBox.getChildren().addAll(titleLabel, spacer, refreshButton, closeButton);

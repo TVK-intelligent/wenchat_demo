@@ -317,13 +317,20 @@ public class ChatService {
      */
     public List<User> searchUsers(String keyword) {
         try {
-            String response = get("/api/users/search?keyword=" + java.net.URLEncoder.encode(keyword, "UTF-8"), true);
+            String encodedKeyword = java.net.URLEncoder.encode(keyword, "UTF-8");
+            String endpoint = "/api/friends/search?query=" + encodedKeyword;
+            log.info("🔍 Searching users with endpoint: {}", endpoint);
+
+            String response = get(endpoint, true);
+            log.info("📥 Search response: {}", response);
+
             List<User> users = objectMapper.readValue(response,
                     TypeFactory.defaultInstance().constructCollectionType(List.class, User.class));
+            log.info("✅ Found {} users", users.size());
             return users;
 
         } catch (Exception e) {
-            log.error("Failed to search users: " + e.getMessage());
+            log.error("❌ Failed to search users: " + e.getMessage(), e);
             return new ArrayList<>();
         }
     }
@@ -587,12 +594,36 @@ public class ChatService {
             if (avatarUrl != null)
                 request.put("avatarUrl", avatarUrl);
 
-            put("/api/users/" + userId, objectMapper.writeValueAsString(request), true);
-            log.info("User profile updated successfully");
-            return true;
+            String body = objectMapper.writeValueAsString(request);
+            log.info("🔄 Updating user profile - Body: {}", body);
+
+            // Try different endpoints - backend may use different patterns
+            String[] endpoints = {
+                    "/api/users/me", // Most common - update current user
+                    "/api/users/" + userId, // Update by ID
+                    "/api/users/profile" // Profile endpoint
+            };
+
+            Exception lastException = null;
+            for (String endpoint : endpoints) {
+                try {
+                    log.info("🔄 Trying endpoint: {}", endpoint);
+                    put(endpoint, body, true);
+                    log.info("✅ User profile updated successfully via {}", endpoint);
+                    return true;
+                } catch (Exception e) {
+                    log.warn("⚠️ Endpoint {} failed: {}", endpoint, e.getMessage());
+                    lastException = e;
+                }
+            }
+
+            if (lastException != null) {
+                throw lastException;
+            }
+            return false;
 
         } catch (Exception e) {
-            log.error("Failed to update user profile: " + e.getMessage());
+            log.error("❌ Failed to update user profile: " + e.getMessage(), e);
             return false;
         }
     }
@@ -1006,7 +1037,7 @@ public class ChatService {
     }
 
     /**
-     * � Upload avatar for user
+     * 📷 Upload avatar for user
      */
     public boolean uploadAvatar(Long userId, String filePath) throws Exception {
         File file = new File(filePath);
@@ -1014,8 +1045,33 @@ public class ChatService {
             throw new Exception("File not found: " + filePath);
         }
 
+        log.info("📷 Uploading avatar for user {} from file: {}", userId, filePath);
+
+        // Backend endpoint is /api/users/{id}/avatar with field name "avatar"
+        String endpoint = "/api/users/" + userId + "/avatar";
+
+        try {
+            log.info("📷 Uploading avatar to endpoint: {}", endpoint);
+            boolean success = uploadAvatarToEndpoint(endpoint, file);
+            if (success) {
+                log.info("✅ Avatar uploaded successfully via {}", endpoint);
+                return true;
+            }
+        } catch (Exception e) {
+            log.error("❌ Avatar upload failed: {}", e.getMessage());
+            throw e;
+        }
+
+        return false;
+    }
+
+    /**
+     * 📷 Helper method to upload avatar to a specific endpoint
+     */
+    private boolean uploadAvatarToEndpoint(String endpoint, File file) throws Exception {
         String boundary = "----FormBoundary" + System.currentTimeMillis();
-        URL url = new URL(baseUrl + "/api/users/" + userId + "/avatar");
+        URL url = new URL(baseUrl + endpoint);
+        log.info("📷 Avatar upload URL: {}", url);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 
         conn.setRequestMethod("POST");
@@ -1029,9 +1085,21 @@ public class ChatService {
         try (OutputStream os = conn.getOutputStream()) {
             // Write boundary start
             os.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+            // Backend expects field name 'avatar' - @RequestParam("avatar")
             os.write(("Content-Disposition: form-data; name=\"avatar\"; filename=\"" + file.getName() + "\"\r\n")
                     .getBytes(StandardCharsets.UTF_8));
-            os.write(("Content-Type: application/octet-stream\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+
+            // Determine content type from file extension
+            String contentType = "application/octet-stream";
+            String fileName = file.getName().toLowerCase();
+            if (fileName.endsWith(".png")) {
+                contentType = "image/png";
+            } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                contentType = "image/jpeg";
+            } else if (fileName.endsWith(".gif")) {
+                contentType = "image/gif";
+            }
+            os.write(("Content-Type: " + contentType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
 
             // Write file content
             try (FileInputStream fis = new FileInputStream(file)) {
@@ -1047,7 +1115,9 @@ public class ChatService {
         }
 
         int responseCode = conn.getResponseCode();
-        if (responseCode == 200) {
+        log.info("📷 Avatar upload response code: {}", responseCode);
+
+        if (responseCode == 200 || responseCode == 201) {
             try (BufferedReader br = new BufferedReader(
                     new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
                 StringBuilder response = new StringBuilder();
@@ -1055,21 +1125,27 @@ public class ChatService {
                 while ((line = br.readLine()) != null) {
                     response.append(line);
                 }
-                log.debug("Avatar upload response: {}", response.toString());
+                log.info("📷 Avatar upload response: {}", response.toString());
             }
             return true;
         } else {
-            log.error("Avatar upload failed with response code: {}", responseCode);
-            try (BufferedReader br = new BufferedReader(
-                    new InputStreamReader(conn.getErrorStream(), StandardCharsets.UTF_8))) {
-                StringBuilder error = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) {
-                    error.append(line);
+            String errorMsg = "HTTP " + responseCode;
+            InputStream errorStream = conn.getErrorStream();
+            if (errorStream != null) {
+                try (BufferedReader br = new BufferedReader(
+                        new InputStreamReader(errorStream, StandardCharsets.UTF_8))) {
+                    StringBuilder error = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) {
+                        error.append(line);
+                    }
+                    if (error.length() > 0) {
+                        errorMsg += " - " + error.toString();
+                    }
                 }
-                log.error("Error response: {}", error.toString());
             }
-            return false;
+            log.error("📷 Avatar upload error: {}", errorMsg);
+            throw new Exception(errorMsg);
         }
     }
 

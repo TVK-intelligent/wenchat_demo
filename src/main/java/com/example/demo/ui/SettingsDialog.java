@@ -98,16 +98,10 @@ public class SettingsDialog extends Stage {
         showOnlineStatusCheckBox.setStyle("-fx-font-size: 13px;");
 
         saveButton = new Button("💾 Lưu thay đổi");
-        saveButton.setStyle(
-                "-fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%); " +
-                        "-fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 12 24; " +
-                        "-fx-border-radius: 25; -fx-background-radius: 25; -fx-cursor: hand;");
+        saveButton.getStyleClass().add("settings-save-button");
 
         uploadAvatarButton = new Button("📷 Upload");
-        uploadAvatarButton.setStyle(
-                "-fx-background-color: #f0f2f5; -fx-text-fill: #667eea; " +
-                        "-fx-font-weight: bold; -fx-padding: 8 16; -fx-border-color: #667eea; " +
-                        "-fx-border-radius: 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        uploadAvatarButton.getStyleClass().add("settings-upload-button");
 
         avatarLabel = new Label("Không có ảnh đại diện");
         avatarLabel.setStyle("-fx-text-fill: #6c757d; -fx-font-size: 12px;");
@@ -169,10 +163,7 @@ public class SettingsDialog extends Stage {
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
         Button closeButton = new Button("Đóng");
-        closeButton.setStyle(
-                "-fx-background-color: #f0f2f5; -fx-text-fill: #495057; " +
-                        "-fx-padding: 12 24; -fx-border-radius: 25; -fx-background-radius: 25; " +
-                        "-fx-cursor: hand;");
+        closeButton.getStyleClass().add("settings-close-button");
         closeButton.setOnAction(e -> close());
 
         buttonBox.getChildren().addAll(saveButton, closeButton);
@@ -288,8 +279,8 @@ public class SettingsDialog extends Stage {
         // Test button for volume
         Button testSoundButton = new Button("🔔 Test");
         testSoundButton.setStyle(
-                "-fx-background-color: #f0f2f5; -fx-text-fill: #667eea; " +
-                        "-fx-font-weight: bold; -fx-padding: 6 12; -fx-border-color: #667eea; " +
+                "-fx-background-color: #fb923c; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 6 12; " +
                         "-fx-border-radius: 15; -fx-background-radius: 15; -fx-cursor: hand; -fx-font-size: 11px;");
         testSoundButton.setOnAction(e -> notificationService.playNotificationSound(
                 NotificationService.NotificationType.MESSAGE));
@@ -394,7 +385,12 @@ public class SettingsDialog extends Stage {
         String newDisplayName = displayNameField.getText().trim();
         Boolean newShowOnlineStatus = showOnlineStatusCheckBox.isSelected();
 
+        log.info("💾 Saving settings - Display Name: {}", newDisplayName);
+
         // Update user profile
+        saveButton.setDisable(true);
+        saveButton.setText("⏳ Đang lưu...");
+
         boolean success = chatService.updateUserProfile(
                 currentUser.getId(),
                 newDisplayName.isEmpty() ? null : newDisplayName,
@@ -404,12 +400,25 @@ public class SettingsDialog extends Stage {
             statusLabel.setText("✅ Cài đặt đã được lưu!");
             statusLabel.setStyle("-fx-text-fill: #28a745;");
 
+            // Refresh user info from server
+            User updatedUser = chatService.getCurrentUser();
+            if (updatedUser != null) {
+                currentUser = updatedUser;
+                log.info("✅ User info refreshed - Display Name: {}", updatedUser.getDisplayName());
+            }
+
             currentUser.setDisplayName(newDisplayName);
             currentUser.setShowOnlineStatus(newShowOnlineStatus);
+
+            showSuccess("Thành công", "Đã lưu thay đổi thành công!");
         } else {
             statusLabel.setText("❌ Không thể lưu cài đặt");
             statusLabel.setStyle("-fx-text-fill: #dc3545;");
+            showError("Lỗi", "Không thể lưu cài đặt. Vui lòng kiểm tra log để xem chi tiết lỗi.");
         }
+
+        saveButton.setDisable(false);
+        saveButton.setText("💾 Lưu thay đổi");
     }
 
     private void uploadAvatar() {
@@ -439,7 +448,13 @@ public class SettingsDialog extends Stage {
                 }
             } catch (Exception e) {
                 log.error("Error uploading avatar", e);
-                showError("Lỗi", "Lỗi khi tải lên ảnh: " + e.getMessage());
+                String errorMessage = e.getMessage();
+                if (errorMessage != null && errorMessage.contains("403")) {
+                    showError("Lỗi",
+                            "Server không hỗ trợ upload ảnh đại diện (HTTP 403). Vui lòng liên hệ admin để kiểm tra API.");
+                } else {
+                    showError("Lỗi", "Lỗi khi tải lên ảnh: " + errorMessage);
+                }
             } finally {
                 uploadAvatarButton.setDisable(false);
                 uploadAvatarButton.setText("📷 Upload");

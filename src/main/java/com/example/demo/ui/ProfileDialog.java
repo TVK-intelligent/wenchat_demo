@@ -142,6 +142,9 @@ public class ProfileDialog extends Stage {
         bottomBox.setAlignment(Pos.CENTER_RIGHT);
 
         Button closeButton = new Button("Đóng");
+        closeButton.setStyle(
+                "-fx-background-color: #6c757d; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 25; -fx-background-radius: 20; -fx-cursor: hand;");
         closeButton.setOnAction(e -> close());
 
         bottomBox.getChildren().add(closeButton);

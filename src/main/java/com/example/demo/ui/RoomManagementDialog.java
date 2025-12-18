@@ -8,16 +8,21 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.shape.Circle;
+import javafx.scene.effect.DropShadow;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import javafx.scene.shape.Circle;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * Room Management Dialog - Create, Join, and Manage Rooms
+ * Room Management Dialog - Create, Join, Delete, and Manage Rooms
  */
 @Slf4j
 public class RoomManagementDialog extends Stage {
@@ -33,8 +38,21 @@ public class RoomManagementDialog extends Stage {
     private CheckBox privateRoomCheckBox;
     private Button createRoomButton;
     private Button joinRoomButton;
+    private Button deleteRoomButton;
+    private Button leaveRoomButton;
     private Button inviteButton;
     private ComboBox<ChatRoom> inviteRoomSelector;
+    private Label myRoomCountLabel;
+
+    // Avatar colors
+    private static final Color[] AVATAR_COLORS = {
+            Color.web("#667eea"), Color.web("#764ba2"), Color.web("#f093fb"),
+            Color.web("#f5576c"), Color.web("#4facfe"), Color.web("#43e97b"),
+            Color.web("#fa709a"), Color.web("#30cfd0")
+    };
+
+    // Callback for room selection
+    private Consumer<ChatRoom> onRoomSelected;
 
     public RoomManagementDialog(ChatService chatService) {
         this.chatService = chatService;
@@ -42,7 +60,7 @@ public class RoomManagementDialog extends Stage {
         initModality(Modality.APPLICATION_MODAL);
         setTitle("🏠 Quản lý Phòng Chat");
         setResizable(true);
-        setWidth(900);
+        setWidth(800);
         setHeight(700);
 
         initComponents();
@@ -50,148 +68,262 @@ public class RoomManagementDialog extends Stage {
         setupEventHandlers();
 
         Scene scene = new Scene(createLayout());
-        scene.getStylesheets().add("data:text/css," +
-                ".room-list { -fx-background-color: #f8f9fa; -fx-border-color: #dee2e6; -fx-border-radius: 8; }" +
-                ".room-item { -fx-padding: 10; -fx-border-color: #e9ecef; -fx-border-width: 0 0 1 0; }" +
-                ".room-item:hover { -fx-background-color: #e3f2fd; }" +
-                ".room-item:selected { -fx-background-color: #007bff; -fx-text-fill: white; }");
-
+        if (getClass().getResource("/styles.css") != null) {
+            scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
+        }
         setScene(scene);
+    }
+
+    public void setOnRoomSelected(Consumer<ChatRoom> callback) {
+        this.onRoomSelected = callback;
     }
 
     private void initComponents() {
         // Room lists
         myRoomsList = new ListView<>();
-        myRoomsList.setPrefHeight(200);
-        myRoomsList.setCellFactory(param -> new RoomListCell());
+        myRoomsList.setPrefHeight(250);
+        myRoomsList.setCellFactory(param -> new MyRoomListCell());
 
         publicRoomsList = new ListView<>();
-        publicRoomsList.setPrefHeight(200);
-        publicRoomsList.setCellFactory(param -> new RoomListCell());
+        publicRoomsList.setPrefHeight(250);
+        publicRoomsList.setCellFactory(param -> new PublicRoomListCell());
 
         // Create room form
         roomNameField = new TextField();
-        roomNameField.setPromptText("Tên phòng...");
+        roomNameField.setPromptText("🏠 Nhập tên phòng...");
+        roomNameField.setStyle(
+                "-fx-background-color: #f8f9fa; -fx-border-color: #dee2e6; " +
+                        "-fx-border-radius: 25; -fx-background-radius: 25; -fx-padding: 10 20;");
 
         roomDescriptionField = new TextArea();
-        roomDescriptionField.setPromptText("Mô tả phòng (tùy chọn)...");
+        roomDescriptionField.setPromptText("📝 Mô tả phòng (tùy chọn)...");
         roomDescriptionField.setPrefRowCount(3);
+        roomDescriptionField.setStyle(
+                "-fx-background-color: #f8f9fa; -fx-border-color: #dee2e6; " +
+                        "-fx-border-radius: 10; -fx-background-radius: 10;");
 
-        privateRoomCheckBox = new CheckBox("Phòng riêng tư");
+        privateRoomCheckBox = new CheckBox("🔒 Phòng riêng tư");
+        privateRoomCheckBox.setStyle("-fx-font-size: 13px;");
 
         createRoomButton = new Button("➕ Tạo Phòng");
-        createRoomButton.getStyleClass().add("create-button");
+        createRoomButton.getStyleClass().add("room-create-button");
 
         // Join room
-        joinRoomButton = new Button("🚪 Tham Gia");
-        joinRoomButton.getStyleClass().add("join-button");
+        joinRoomButton = new Button("🚪 Tham Gia Phòng");
+        joinRoomButton.setStyle(
+                "-fx-background-color: #4ade80; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
         joinRoomButton.setDisable(true);
+
+        // Delete room
+        deleteRoomButton = new Button("🗑️ Xóa Phòng");
+        deleteRoomButton.setStyle(
+                "-fx-background-color: #f87171; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        deleteRoomButton.setDisable(true);
+
+        // Leave room
+        leaveRoomButton = new Button("🚪 Rời Phòng");
+        leaveRoomButton.setStyle(
+                "-fx-background-color: #fb923c; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        leaveRoomButton.setDisable(true);
 
         // Invite friends
         availableFriendsList = new ListView<>();
-        availableFriendsList.setPrefHeight(150);
+        availableFriendsList.setPrefHeight(180);
         availableFriendsList.setCellFactory(param -> new UserListCell());
 
         inviteRoomSelector = new ComboBox<>();
-        inviteRoomSelector.setPromptText("Chọn phòng...");
+        inviteRoomSelector.setPromptText("📌 Chọn phòng để mời...");
+        inviteRoomSelector.setStyle("-fx-background-radius: 20;");
+        inviteRoomSelector.setPrefWidth(300);
 
-        inviteButton = new Button("📨 Mời");
-        inviteButton.getStyleClass().add("invite-button");
+        inviteButton = new Button("📨 Gửi Lời Mời");
+        inviteButton.getStyleClass().add("room-invite-button");
         inviteButton.setDisable(true);
     }
 
     private VBox createLayout() {
         VBox mainLayout = new VBox(20);
-        mainLayout.setPadding(new Insets(20));
+        mainLayout.setPadding(new Insets(25));
         mainLayout.setStyle("-fx-background-color: #ffffff;");
 
-        // Title
-        Label titleLabel = new Label("🏠 Quản lý Phòng Chat");
-        titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #495057;");
-        mainLayout.getChildren().add(titleLabel);
+        // Header with gradient icon
+        HBox headerBox = new HBox(15);
+        headerBox.setAlignment(Pos.CENTER_LEFT);
 
-        // Tab pane for different sections
+        Circle headerIcon = new Circle(25);
+        headerIcon.setFill(new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.web("#667eea")),
+                new Stop(1, Color.web("#764ba2"))));
+        headerIcon.setEffect(new DropShadow(8, Color.web("#667eea50")));
+
+        Label iconEmoji = new Label("🏠");
+        iconEmoji.setStyle("-fx-font-size: 20px;");
+        StackPane iconPane = new StackPane(headerIcon, iconEmoji);
+
+        VBox titleBox = new VBox(2);
+        Label titleLabel = new Label("Quản lý Phòng Chat");
+        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529;");
+        Label subtitleLabel = new Label("Tạo, tham gia và quản lý các phòng chat");
+        subtitleLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
+        titleBox.getChildren().addAll(titleLabel, subtitleLabel);
+
+        headerBox.getChildren().addAll(iconPane, titleBox);
+
+        // Tab pane with custom styling
         TabPane tabPane = new TabPane();
+        tabPane.setStyle("-fx-background-color: transparent;");
 
         // My Rooms Tab
-        Tab myRoomsTab = new Tab("Phòng của tôi", createMyRoomsTab());
+        Tab myRoomsTab = new Tab("🏠 Phòng của tôi", createMyRoomsTab());
         myRoomsTab.setClosable(false);
 
         // Public Rooms Tab
-        Tab publicRoomsTab = new Tab("Phòng công khai", createPublicRoomsTab());
+        Tab publicRoomsTab = new Tab("🌐 Phòng công khai", createPublicRoomsTab());
         publicRoomsTab.setClosable(false);
 
         // Create Room Tab
-        Tab createRoomTab = new Tab("Tạo phòng mới", createRoomTab());
+        Tab createRoomTab = new Tab("➕ Tạo phòng", createRoomTab());
         createRoomTab.setClosable(false);
 
         // Invites Tab
-        Tab invitesTab = new Tab("Mời bạn bè", createInvitesTab());
+        Tab invitesTab = new Tab("📨 Mời bạn bè", createInvitesTab());
         invitesTab.setClosable(false);
 
         tabPane.getTabs().addAll(myRoomsTab, publicRoomsTab, createRoomTab, invitesTab);
-        mainLayout.getChildren().add(tabPane);
+        VBox.setVgrow(tabPane, Priority.ALWAYS);
 
         // Bottom buttons
-        HBox buttonBox = new HBox(10);
+        HBox buttonBox = new HBox(12);
         buttonBox.setAlignment(Pos.CENTER_RIGHT);
 
+        Button refreshButton = new Button("🔄 Làm mới");
+        refreshButton.setStyle(
+                "-fx-background-color: #4ade80; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        refreshButton.setOnAction(e -> refreshData());
+
         Button closeButton = new Button("Đóng");
+        closeButton.setStyle(
+                "-fx-background-color: #6c757d; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 25; -fx-background-radius: 20; -fx-cursor: hand;");
         closeButton.setOnAction(e -> close());
 
-        buttonBox.getChildren().add(closeButton);
-        mainLayout.getChildren().add(buttonBox);
+        buttonBox.getChildren().addAll(refreshButton, closeButton);
+
+        mainLayout.getChildren().addAll(headerBox, tabPane, buttonBox);
 
         return mainLayout;
     }
 
     private VBox createMyRoomsTab() {
-        VBox tabContent = new VBox(10);
-        tabContent.setPadding(new Insets(10));
+        VBox tabContent = new VBox(15);
+        tabContent.setPadding(new Insets(15));
 
-        Label label = new Label("Phòng của bạn:");
-        label.setStyle("-fx-font-weight: bold;");
+        // Stats card
+        HBox statsCard = new HBox(20);
+        statsCard.setPadding(new Insets(15));
+        statsCard.setStyle(
+                "-fx-background-color: linear-gradient(135deg, #667eea20 0%, #764ba220 100%); " +
+                        "-fx-background-radius: 12;");
+        statsCard.setAlignment(Pos.CENTER_LEFT);
 
-        tabContent.getChildren().addAll(label, myRoomsList);
+        VBox statBox = new VBox(2);
+        myRoomCountLabel = new Label("0");
+        myRoomCountLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #667eea;");
+        Label statLabel = new Label("Phòng");
+        statLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
+        statBox.getChildren().addAll(myRoomCountLabel, statLabel);
 
+        statsCard.getChildren().add(statBox);
+
+        Label label = new Label("Danh sách phòng của bạn:");
+        label.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
+
+        VBox.setVgrow(myRoomsList, Priority.ALWAYS);
+        myRoomsList.setStyle(
+                "-fx-background-color: #f8f9fa; -fx-background-radius: 12; " +
+                        "-fx-border-radius: 12; -fx-border-color: #e9ecef;");
+
+        // Action buttons
         HBox buttonBox = new HBox(10);
         buttonBox.setAlignment(Pos.CENTER_LEFT);
 
-        Button selectButton = new Button("Chọn Phòng");
+        Button selectButton = new Button("✔️ Chọn Phòng");
+        selectButton.setStyle(
+                "-fx-background-color: #667eea; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+        selectButton.setDisable(true);
         selectButton.setOnAction(e -> {
             ChatRoom selected = myRoomsList.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                // TODO: Handle room selection
+            if (selected != null && onRoomSelected != null) {
+                onRoomSelected.accept(selected);
                 close();
             }
         });
 
-        buttonBox.getChildren().add(selectButton);
-        tabContent.getChildren().add(buttonBox);
+        myRoomsList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            selectButton.setDisable(newVal == null);
+            deleteRoomButton.setDisable(newVal == null);
+            leaveRoomButton.setDisable(newVal == null);
+        });
+
+        buttonBox.getChildren().addAll(selectButton, deleteRoomButton, leaveRoomButton);
+        tabContent.getChildren().addAll(statsCard, label, myRoomsList, buttonBox);
 
         return tabContent;
     }
 
     private VBox createPublicRoomsTab() {
-        VBox tabContent = new VBox(10);
-        tabContent.setPadding(new Insets(10));
+        VBox tabContent = new VBox(15);
+        tabContent.setPadding(new Insets(15));
 
-        Label label = new Label("Phòng công khai:");
-        label.setStyle("-fx-font-weight: bold;");
+        Label label = new Label("Các phòng công khai có thể tham gia:");
+        label.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
 
-        tabContent.getChildren().addAll(label, publicRoomsList, joinRoomButton);
+        VBox.setVgrow(publicRoomsList, Priority.ALWAYS);
+        publicRoomsList.setStyle(
+                "-fx-background-color: #f8f9fa; -fx-background-radius: 12; " +
+                        "-fx-border-radius: 12; -fx-border-color: #e9ecef;");
+        publicRoomsList.setPlaceholder(new Label("Không có phòng công khai nào"));
+
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_LEFT);
+        buttonBox.getChildren().add(joinRoomButton);
+
+        tabContent.getChildren().addAll(label, publicRoomsList, buttonBox);
 
         return tabContent;
     }
 
     private VBox createRoomTab() {
         VBox tabContent = new VBox(15);
-        tabContent.setPadding(new Insets(10));
+        tabContent.setPadding(new Insets(15));
+
+        // Info card
+        HBox infoCard = new HBox(15);
+        infoCard.setPadding(new Insets(12));
+        infoCard.setStyle(
+                "-fx-background-color: #e7f5ff; -fx-background-radius: 10; " +
+                        "-fx-border-color: #74c0fc; -fx-border-radius: 10;");
+        Label infoIcon = new Label("💡");
+        infoIcon.setStyle("-fx-font-size: 16px;");
+        Label infoText = new Label("Tạo phòng mới để chat với bạn bè. Phòng riêng tư chỉ có thể tham gia qua lời mời.");
+        infoText.setStyle("-fx-text-fill: #1971c2; -fx-font-size: 12px;");
+        infoText.setWrapText(true);
+        infoCard.getChildren().addAll(infoIcon, infoText);
+        HBox.setHgrow(infoText, Priority.ALWAYS);
 
         Label nameLabel = new Label("Tên phòng:");
+        nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
+
         Label descLabel = new Label("Mô tả:");
+        descLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
 
         tabContent.getChildren().addAll(
+                infoCard,
                 nameLabel, roomNameField,
                 descLabel, roomDescriptionField,
                 privateRoomCheckBox, createRoomButton);
@@ -200,37 +332,62 @@ public class RoomManagementDialog extends Stage {
     }
 
     private VBox createInvitesTab() {
-        VBox tabContent = new VBox(10);
-        tabContent.setPadding(new Insets(10));
+        VBox tabContent = new VBox(15);
+        tabContent.setPadding(new Insets(15));
 
-        Label roomLabel = new Label("Chọn phòng:");
+        Label roomLabel = new Label("Chọn phòng để mời bạn bè:");
+        roomLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
+
         Label friendsLabel = new Label("Bạn bè có thể mời:");
+        friendsLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
+
+        VBox.setVgrow(availableFriendsList, Priority.ALWAYS);
+        availableFriendsList.setStyle(
+                "-fx-background-color: #f8f9fa; -fx-background-radius: 12; " +
+                        "-fx-border-radius: 12; -fx-border-color: #e9ecef;");
+        availableFriendsList.setPlaceholder(new Label("Chọn một phòng để xem bạn bè có thể mời"));
+
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_LEFT);
+        buttonBox.getChildren().add(inviteButton);
 
         tabContent.getChildren().addAll(
                 roomLabel, inviteRoomSelector,
                 friendsLabel, availableFriendsList,
-                inviteButton);
+                buttonBox);
 
         return tabContent;
     }
 
     private void loadData() {
-        // Load my rooms
-        List<ChatRoom> myRooms = chatService.getMyRooms();
+        // Load my rooms - filter out auto-created private chat rooms
+        List<ChatRoom> myRooms = chatService.getMyRooms().stream()
+                .filter(room -> room.getName() == null || !room.getName().startsWith("PRIVATE_"))
+                .collect(java.util.stream.Collectors.toList());
+        myRoomsList.getItems().clear();
         myRoomsList.getItems().addAll(myRooms);
+        if (myRoomCountLabel != null) {
+            myRoomCountLabel.setText(String.valueOf(myRooms.size()));
+        }
 
         // Load public rooms
         List<ChatRoom> publicRooms = chatService.getPublicRooms();
+        publicRoomsList.getItems().clear();
         publicRoomsList.getItems().addAll(publicRooms);
 
-        // Load available friends for invites
-        List<ChatRoom> myRoomsForInvite = chatService.getMyRooms();
-        inviteRoomSelector.getItems().addAll(myRoomsForInvite);
+        // Load rooms for invite selector (exclude auto-created private rooms)
+        inviteRoomSelector.getItems().clear();
+        inviteRoomSelector.getItems().addAll(myRooms);
 
-        if (!myRoomsForInvite.isEmpty()) {
-            inviteRoomSelector.setValue(myRoomsForInvite.get(0));
-            loadAvailableFriends(myRoomsForInvite.get(0).getId());
+        if (!myRooms.isEmpty()) {
+            inviteRoomSelector.setValue(myRooms.get(0));
+            loadAvailableFriends(myRooms.get(0).getId());
         }
+    }
+
+    private void refreshData() {
+        loadData();
+        showInfo("Đã làm mới", "Danh sách phòng đã được cập nhật!");
     }
 
     private void loadAvailableFriends(Long roomId) {
@@ -250,11 +407,56 @@ public class RoomManagementDialog extends Stage {
             if (selected != null) {
                 boolean success = chatService.joinRoom(selected.getId());
                 if (success) {
-                    // TODO: Handle room joined
-                    close();
+                    showInfo("Thành công", "Đã tham gia phòng: " + selected.getName());
+                    refreshData();
                 } else {
                     showError("Lỗi", "Không thể tham gia phòng này");
                 }
+            }
+        });
+
+        // Delete room button
+        deleteRoomButton.setOnAction(e -> {
+            ChatRoom selected = myRoomsList.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                // Confirm deletion
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                confirm.setTitle("Xác nhận xóa");
+                confirm.setHeaderText("Xóa phòng: " + selected.getName());
+                confirm.setContentText("Bạn có chắc muốn xóa phòng này? Tất cả tin nhắn sẽ bị mất.");
+                confirm.showAndWait().ifPresent(response -> {
+                    if (response == ButtonType.OK) {
+                        boolean success = chatService.deleteRoom(selected.getId());
+                        if (success) {
+                            showInfo("Thành công", "Đã xóa phòng: " + selected.getName());
+                            refreshData();
+                        } else {
+                            showError("Lỗi", "Không thể xóa phòng. Có thể bạn không phải là chủ phòng.");
+                        }
+                    }
+                });
+            }
+        });
+
+        // Leave room button
+        leaveRoomButton.setOnAction(e -> {
+            ChatRoom selected = myRoomsList.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+                confirm.setTitle("Xác nhận rời phòng");
+                confirm.setHeaderText("Rời phòng: " + selected.getName());
+                confirm.setContentText("Bạn có chắc muốn rời khỏi phòng này?");
+                confirm.showAndWait().ifPresent(response -> {
+                    if (response == ButtonType.OK) {
+                        boolean success = chatService.leaveRoom(selected.getId());
+                        if (success) {
+                            showInfo("Đã rời phòng", "Bạn đã rời khỏi phòng: " + selected.getName());
+                            refreshData();
+                        } else {
+                            showError("Lỗi", "Không thể rời phòng");
+                        }
+                    }
+                });
             }
         });
 
@@ -268,16 +470,15 @@ public class RoomManagementDialog extends Stage {
 
             ChatRoom newRoom = chatService.createRoom(name, roomDescriptionField.getText());
             if (newRoom != null) {
-                // Refresh my rooms list
-                myRoomsList.getItems().clear();
-                myRoomsList.getItems().addAll(chatService.getMyRooms());
+                // Refresh data
+                refreshData();
 
                 // Clear form
                 roomNameField.clear();
                 roomDescriptionField.clear();
                 privateRoomCheckBox.setSelected(false);
 
-                showInfo("Thành công", "Phòng đã được tạo!");
+                showInfo("Thành công", "Đã tạo phòng: " + name);
             } else {
                 showError("Lỗi", "Không thể tạo phòng");
             }
@@ -302,7 +503,10 @@ public class RoomManagementDialog extends Stage {
             if (selectedFriend != null && selectedRoom != null) {
                 boolean success = chatService.inviteUserToRoom(selectedRoom.getId(), selectedFriend.getId());
                 if (success) {
-                    showInfo("Thành công", "Đã gửi lời mời!");
+                    String friendName = selectedFriend.getDisplayName() != null
+                            ? selectedFriend.getDisplayName()
+                            : selectedFriend.getUsername();
+                    showInfo("Thành công", "Đã gửi lời mời đến " + friendName);
                     // Refresh available friends
                     loadAvailableFriends(selectedRoom.getId());
                 } else {
@@ -332,8 +536,8 @@ public class RoomManagementDialog extends Stage {
         });
     }
 
-    // Custom cell for room list
-    private static class RoomListCell extends ListCell<ChatRoom> {
+    // Custom cell for my rooms list with action buttons
+    private class MyRoomListCell extends ListCell<ChatRoom> {
         @Override
         protected void updateItem(ChatRoom room, boolean empty) {
             super.updateItem(room, empty);
@@ -341,40 +545,112 @@ public class RoomManagementDialog extends Stage {
                 setText(null);
                 setGraphic(null);
             } else {
-                VBox roomBox = new VBox(5);
-                roomBox.setPadding(new Insets(10));
+                HBox roomBox = new HBox(12);
+                roomBox.setAlignment(Pos.CENTER_LEFT);
+                roomBox.setPadding(new Insets(12, 15, 12, 15));
+                roomBox.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
 
-                HBox header = new HBox(10);
-                header.setAlignment(Pos.CENTER_LEFT);
+                // Room icon
+                StackPane iconPane = new StackPane();
+                Circle roomIcon = new Circle(22);
+                int hash = Math.abs((room.getName() != null ? room.getName() : "").hashCode());
+                roomIcon.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
+                roomIcon.setEffect(new DropShadow(4, Color.web("#00000020")));
 
+                Label iconEmoji = new Label(room.isPrivate() ? "🔒" : "🌐");
+                iconEmoji.setStyle("-fx-font-size: 16px;");
+                iconPane.getChildren().addAll(roomIcon, iconEmoji);
+
+                // Info
+                VBox infoBox = new VBox(3);
                 Label nameLabel = new Label(room.getName());
-                nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+                nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #212529;");
 
-                Label memberCount = new Label("(" + room.getMemberCount() + ")");
-                memberCount.setStyle("-fx-text-fill: #6c757d;");
+                HBox detailsBox = new HBox(10);
+                detailsBox.setAlignment(Pos.CENTER_LEFT);
+                Label memberLabel = new Label("👥 " + room.getMemberCount() + " thành viên");
+                memberLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #6c757d;");
+                Label typeLabel = new Label(room.isPrivate() ? "Riêng tư" : "Công khai");
+                typeLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #6c757d;");
+                detailsBox.getChildren().addAll(memberLabel, typeLabel);
+
+                infoBox.getChildren().addAll(nameLabel, detailsBox);
 
                 Region spacer = new Region();
                 HBox.setHgrow(spacer, Priority.ALWAYS);
 
-                Label privacyIcon = new Label(room.isPrivate() ? "🔒" : "🌐");
-                privacyIcon.setStyle("-fx-font-size: 12px;");
+                roomBox.getChildren().addAll(iconPane, infoBox, spacer);
 
-                header.getChildren().addAll(nameLabel, memberCount, spacer, privacyIcon);
-
-                Label descLabel = new Label(room.getDescription() != null ? room.getDescription() : "");
-                descLabel.setStyle("-fx-text-fill: #6c757d; -fx-font-size: 12px;");
-
-                roomBox.getChildren().addAll(header, descLabel);
+                // Hover effect
+                roomBox.setOnMouseEntered(e -> roomBox.setStyle(
+                        "-fx-background-color: #f8f9fa; -fx-background-radius: 10;"));
+                roomBox.setOnMouseExited(e -> roomBox.setStyle(
+                        "-fx-background-color: white; -fx-background-radius: 10;"));
 
                 setGraphic(roomBox);
                 setText(null);
-                getStyleClass().add("room-item");
+                setStyle("-fx-background-color: transparent; -fx-padding: 3 0;");
+            }
+        }
+    }
+
+    // Custom cell for public rooms list
+    private class PublicRoomListCell extends ListCell<ChatRoom> {
+        @Override
+        protected void updateItem(ChatRoom room, boolean empty) {
+            super.updateItem(room, empty);
+            if (empty || room == null) {
+                setText(null);
+                setGraphic(null);
+            } else {
+                HBox roomBox = new HBox(12);
+                roomBox.setAlignment(Pos.CENTER_LEFT);
+                roomBox.setPadding(new Insets(10, 12, 10, 12));
+                roomBox.setStyle("-fx-background-color: white; -fx-background-radius: 8;");
+
+                // Room icon
+                StackPane iconPane = new StackPane();
+                Circle roomIcon = new Circle(18);
+                int hash = Math.abs((room.getName() != null ? room.getName() : "").hashCode());
+                roomIcon.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
+
+                Label iconEmoji = new Label("🌐");
+                iconEmoji.setStyle("-fx-font-size: 12px;");
+                iconPane.getChildren().addAll(roomIcon, iconEmoji);
+
+                // Info
+                VBox infoBox = new VBox(2);
+                Label nameLabel = new Label(room.getName());
+                nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+
+                Label descLabel = new Label(room.getDescription() != null ? room.getDescription() : "");
+                descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #6c757d;");
+
+                infoBox.getChildren().addAll(nameLabel, descLabel);
+
+                Region spacer = new Region();
+                HBox.setHgrow(spacer, Priority.ALWAYS);
+
+                Label memberCount = new Label("👥 " + room.getMemberCount());
+                memberCount.setStyle("-fx-text-fill: #6c757d; -fx-font-size: 11px;");
+
+                roomBox.getChildren().addAll(iconPane, infoBox, spacer, memberCount);
+
+                // Hover
+                roomBox.setOnMouseEntered(e -> roomBox.setStyle(
+                        "-fx-background-color: #f0f2f5; -fx-background-radius: 8;"));
+                roomBox.setOnMouseExited(e -> roomBox.setStyle(
+                        "-fx-background-color: white; -fx-background-radius: 8;"));
+
+                setGraphic(roomBox);
+                setText(null);
+                setStyle("-fx-background-color: transparent; -fx-padding: 2 0;");
             }
         }
     }
 
     // Custom cell for user list
-    private static class UserListCell extends ListCell<User> {
+    private class UserListCell extends ListCell<User> {
         @Override
         protected void updateItem(User user, boolean empty) {
             super.updateItem(user, empty);
@@ -384,19 +660,39 @@ public class RoomManagementDialog extends Stage {
             } else {
                 HBox userBox = new HBox(10);
                 userBox.setAlignment(Pos.CENTER_LEFT);
-                userBox.setPadding(new Insets(8));
+                userBox.setPadding(new Insets(8, 12, 8, 12));
+                userBox.setStyle("-fx-background-color: white; -fx-background-radius: 8;");
 
+                // Avatar
+                StackPane avatarPane = new StackPane();
                 Circle avatar = new Circle(16);
-                avatar.setFill(javafx.scene.paint.Color.color(Math.random(), Math.random(), Math.random()));
+                int hash = Math.abs((user.getUsername() != null ? user.getUsername() : "").hashCode());
+                avatar.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
+
+                String initial = user.getDisplayName() != null && user.getDisplayName().length() > 0
+                        ? user.getDisplayName().substring(0, 1).toUpperCase()
+                        : "?";
+                Label initialLabel = new Label(initial);
+                initialLabel.setStyle("-fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: bold;");
+                avatarPane.getChildren().addAll(avatar, initialLabel);
 
                 Label nameLabel = new Label(user.getDisplayName() != null ? user.getDisplayName() : user.getUsername());
-                nameLabel.setStyle("-fx-font-weight: bold;");
+                nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
 
-                userBox.getChildren().addAll(avatar, nameLabel);
-                HBox.setHgrow(nameLabel, Priority.ALWAYS);
+                Label usernameLabel = new Label("@" + user.getUsername());
+                usernameLabel.setStyle("-fx-text-fill: #6c757d; -fx-font-size: 10px;");
+
+                userBox.getChildren().addAll(avatarPane, nameLabel, usernameLabel);
+
+                // Hover
+                userBox.setOnMouseEntered(e -> userBox.setStyle(
+                        "-fx-background-color: #f0f2f5; -fx-background-radius: 8;"));
+                userBox.setOnMouseExited(e -> userBox.setStyle(
+                        "-fx-background-color: white; -fx-background-radius: 8;"));
 
                 setGraphic(userBox);
                 setText(null);
+                setStyle("-fx-background-color: transparent; -fx-padding: 2 0;");
             }
         }
     }

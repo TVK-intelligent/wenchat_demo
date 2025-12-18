@@ -31,7 +31,7 @@ import com.example.demo.ui.ContentArea;
 import com.example.demo.ui.Sidebar;
 import com.example.demo.ui.RoomManagementDialog;
 import com.example.demo.ui.FriendsManagementDialog;
-import com.example.demo.ui.UserSearchDialog;
+
 import com.example.demo.ui.SettingsDialog;
 import com.example.demo.ui.ProfileDialog;
 import com.example.demo.ui.MessageHistoryDialog;
@@ -173,11 +173,6 @@ public class ChatClientFXApp extends Application {
         // Friends handler
         sidebar.setOnFriendsClicked(v -> {
             showFriendsManagementDialog();
-        });
-
-        // Search handler
-        sidebar.setOnSearchClicked(v -> {
-            showUserSearchDialog();
         });
 
         // Invites handler
@@ -408,16 +403,6 @@ public class ChatClientFXApp extends Application {
                 });
             }
         }
-    }
-
-    private void showUserSearchDialog() {
-        if (chatService == null || jwtToken == null) {
-            showError("Lỗi", "Vui lòng đăng nhập trước.");
-            return;
-        }
-
-        UserSearchDialog dialog = new UserSearchDialog(chatService);
-        dialog.showAndWait();
     }
 
     private void showRoomInviteDialog() {
@@ -718,8 +703,11 @@ public class ChatClientFXApp extends Application {
 
     private void loadRooms() {
         try {
-            // Load rooms from ChatService
-            loadedRooms = chatService.getMyRooms();
+            // Load rooms from ChatService - filter out auto-created private chat rooms
+            // (PRIVATE_*)
+            loadedRooms = chatService.getMyRooms().stream()
+                    .filter(room -> room.getName() == null || !room.getName().startsWith("PRIVATE_"))
+                    .collect(java.util.stream.Collectors.toList());
             if (loadedRooms != null && !loadedRooms.isEmpty()) {
                 // Load rooms into sidebar
                 sidebar.loadRoomsFromChatRooms(loadedRooms);

@@ -37,6 +37,7 @@ public class FriendsManagementDialog extends Stage {
     private ListView<User> searchResultsList;
     private Button addFriendButton;
     private Button refreshButton;
+    private Label friendCountLabel;
 
     // Callback for starting private chat
     private Consumer<User> onMessageClicked;
@@ -104,8 +105,8 @@ public class FriendsManagementDialog extends Stage {
 
         refreshButton = new Button("🔄 Làm mới");
         refreshButton.setStyle(
-                "-fx-background-color: #f0f2f5; -fx-text-fill: #495057; " +
-                        "-fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
+                "-fx-background-color: #4ade80; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 20; -fx-background-radius: 20; -fx-cursor: hand;");
     }
 
     private VBox createLayout() {
@@ -161,8 +162,8 @@ public class FriendsManagementDialog extends Stage {
 
         Button closeButton = new Button("Đóng");
         closeButton.setStyle(
-                "-fx-background-color: #e9ecef; -fx-text-fill: #495057; " +
-                        "-fx-padding: 10 25; -fx-background-radius: 20; -fx-cursor: hand;");
+                "-fx-background-color: #6c757d; -fx-text-fill: white; " +
+                        "-fx-font-weight: bold; -fx-padding: 10 25; -fx-background-radius: 20; -fx-cursor: hand;");
         closeButton.setOnAction(e -> close());
 
         buttonBox.getChildren().addAll(refreshButton, closeButton);
@@ -185,16 +186,11 @@ public class FriendsManagementDialog extends Stage {
         statsCard.setAlignment(Pos.CENTER_LEFT);
 
         VBox statBox = new VBox(2);
-        Label statNum = new Label("0");
-        statNum.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #667eea;");
+        friendCountLabel = new Label("0");
+        friendCountLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #667eea;");
         Label statLabel = new Label("Bạn bè");
         statLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
-        statBox.getChildren().addAll(statNum, statLabel);
-
-        // Update stats when friends load
-        friendsList.itemsProperty().addListener((obs, oldList, newList) -> {
-            statNum.setText(String.valueOf(newList.size()));
-        });
+        statBox.getChildren().addAll(friendCountLabel, statLabel);
 
         statsCard.getChildren().add(statBox);
 
@@ -282,6 +278,11 @@ public class FriendsManagementDialog extends Stage {
 
                 friendsList.getItems().add(user);
             }
+
+            // Cập nhật số lượng bạn bè
+            if (friendCountLabel != null) {
+                friendCountLabel.setText(String.valueOf(friendsList.getItems().size()));
+            }
         } catch (Exception e) {
             log.error("Error loading friends", e);
         }
@@ -302,6 +303,7 @@ public class FriendsManagementDialog extends Stage {
         if (!keyword.isEmpty()) {
             try {
                 List<User> results = chatService.searchUsers(keyword);
+                int originalCount = results.size();
 
                 // Filter out current user from search results
                 User currentUser = chatService.getCurrentUser();
@@ -313,10 +315,19 @@ public class FriendsManagementDialog extends Stage {
                 List<Long> friendIds = friendsList.getItems().stream()
                         .map(User::getId)
                         .collect(java.util.stream.Collectors.toList());
+                int beforeFriendFilter = results.size();
                 results.removeIf(u -> friendIds.contains(u.getId()));
 
                 searchResultsList.getItems().clear();
                 searchResultsList.getItems().addAll(results);
+
+                // Show info message if all results were filtered because they're already
+                // friends
+                if (originalCount > 0 && results.isEmpty() && beforeFriendFilter > 0) {
+                    searchResultsList.setPlaceholder(new Label("Người dùng đã là bạn của bạn rồi!"));
+                } else if (results.isEmpty()) {
+                    searchResultsList.setPlaceholder(new Label("Không tìm thấy người dùng nào"));
+                }
             } catch (Exception e) {
                 log.error("Error searching users", e);
             }

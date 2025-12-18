@@ -31,7 +31,6 @@ public class Sidebar extends VBox {
     private Button profileButton;
     private Button addRoomButton;
     private Button friendsButton;
-    private Button searchButton;
     private Button invitesButton;
     private Button historyButton;
     private Label currentUserLabel;
@@ -45,7 +44,6 @@ public class Sidebar extends VBox {
     private Consumer<Void> onProfileClicked;
     private Consumer<Void> onAddRoomClicked;
     private Consumer<Void> onFriendsClicked;
-    private Consumer<Void> onSearchClicked;
     private Consumer<Void> onInvitesClicked;
     private Consumer<Void> onHistoryClicked;
     private Consumer<String> onUserClicked;
@@ -140,7 +138,7 @@ public class Sidebar extends VBox {
 
         profileButton = createQuickButton("👤", "Profile", "#FF6B6B");
         friendsButton = createQuickButton("👥", "Friends", "#4ECDC4");
-        searchButton = createQuickButton("🔍", "Search", "#45B7D1");
+        Button roomManageButton = createQuickButton("🏠", "Phòng", "#45B7D1");
         settingsButton = createQuickButton("⚙️", "Settings", "#96CEB4");
 
         profileButton.setOnAction(e -> {
@@ -151,16 +149,16 @@ public class Sidebar extends VBox {
             if (onFriendsClicked != null)
                 onFriendsClicked.accept(null);
         });
-        searchButton.setOnAction(e -> {
-            if (onSearchClicked != null)
-                onSearchClicked.accept(null);
+        roomManageButton.setOnAction(e -> {
+            if (onAddRoomClicked != null)
+                onAddRoomClicked.accept(null);
         });
         settingsButton.setOnAction(e -> {
             if (onSettingsClicked != null)
                 onSettingsClicked.accept(null);
         });
 
-        quickActions.getChildren().addAll(profileButton, friendsButton, searchButton, settingsButton);
+        quickActions.getChildren().addAll(profileButton, friendsButton, roomManageButton, settingsButton);
 
         VBox navContainer = new VBox(10);
         navContainer.setPadding(new Insets(5, 15, 5, 15));
@@ -522,10 +520,6 @@ public class Sidebar extends VBox {
 
     public void setOnFriendsClicked(Consumer<Void> handler) {
         this.onFriendsClicked = handler;
-    }
-
-    public void setOnSearchClicked(Consumer<Void> handler) {
-        this.onSearchClicked = handler;
     }
 
     public void setOnInvitesClicked(Consumer<Void> handler) {

@@ -324,6 +324,10 @@ public class ContentArea extends BorderPane {
     }
 
     public void addMessage(String user, String message, LocalDateTime timestamp, boolean isMine) {
+        // Check if dark mode is enabled
+        boolean isDarkMode = getStyleClass().contains("dark-theme") ||
+                (getParent() != null && getParent().getStyleClass().contains("dark-theme"));
+
         HBox alignmentBox = new HBox(10);
         alignmentBox.setPadding(new Insets(2, 10, 2, 10));
 
@@ -337,6 +341,10 @@ public class ContentArea extends BorderPane {
         if (!isMine) {
             Label userLabel = new Label(user);
             userLabel.getStyleClass().add("message-sender");
+            // Apply dark mode style directly if needed
+            if (isDarkMode) {
+                userLabel.setStyle("-fx-text-fill: #e0e0e5; -fx-font-weight: bold; -fx-font-size: 12px;");
+            }
             messageContainer.getChildren().add(userLabel);
         }
 
@@ -346,15 +354,39 @@ public class ContentArea extends BorderPane {
         bubble.getStyleClass().add(isMine ? "mine" : "others");
         bubble.setPadding(new Insets(10, 14, 10, 14));
 
+        // Apply dark mode bubble style for others' messages
+        if (!isMine && isDarkMode) {
+            bubble.setStyle("-fx-background-color: #2d2d44; -fx-background-radius: 20 20 20 6; " +
+                    "-fx-border-color: #4a4a6a; -fx-border-width: 1.5; -fx-border-radius: 20 20 20 6;");
+        }
+
         Label messageLabel = new Label(message);
         messageLabel.setWrapText(true);
         messageLabel.setMaxWidth(370);
         messageLabel.getStyleClass().add("message-text");
         messageLabel.getStyleClass().add(isMine ? "mine" : "others");
 
+        // Apply text color directly for dark mode to ensure visibility
+        if (isMine) {
+            messageLabel.setStyle("-fx-text-fill: white; -fx-font-size: 14.5px;");
+        } else if (isDarkMode) {
+            messageLabel.setStyle("-fx-text-fill: #ffffff; -fx-font-size: 14.5px;");
+        } else {
+            messageLabel.setStyle("-fx-text-fill: #1a202c; -fx-font-size: 14.5px;");
+        }
+
         Label timeLabel = new Label(timestamp.format(DateTimeFormatter.ofPattern("HH:mm")));
         timeLabel.getStyleClass().add("message-time");
         timeLabel.getStyleClass().add(isMine ? "mine" : "others");
+
+        // Apply time label style directly
+        if (isMine) {
+            timeLabel.setStyle("-fx-text-fill: rgba(255,255,255,0.85); -fx-font-size: 10.5px;");
+        } else if (isDarkMode) {
+            timeLabel.setStyle("-fx-text-fill: #a8b0c0; -fx-font-size: 10.5px;");
+        } else {
+            timeLabel.setStyle("-fx-text-fill: #718096; -fx-font-size: 10.5px;");
+        }
 
         HBox timeBox = new HBox(timeLabel);
         timeBox.setAlignment(isMine ? Pos.BOTTOM_RIGHT : Pos.BOTTOM_LEFT);
