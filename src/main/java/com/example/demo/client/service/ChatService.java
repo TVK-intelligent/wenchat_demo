@@ -54,6 +54,13 @@ public class ChatService {
     }
 
     /**
+     * 🌐 Get base URL for avatar loading and other resources
+     */
+    public String getBaseUrl() {
+        return this.baseUrl;
+    }
+
+    /**
      * �🔐 Login user
      */
     public LoginResponse login(String username, String password) {
@@ -585,47 +592,75 @@ public class ChatService {
 
     /**
      * ✏️ Update user profile
+     * Backend uses @RequestParam so we need to send as form parameters, not JSON
+     * body
      */
     public boolean updateUserProfile(Long userId, String displayName, String avatarUrl) {
         try {
-            Map<String, Object> request = new HashMap<>();
-            if (displayName != null)
-                request.put("displayName", displayName);
-            if (avatarUrl != null)
-                request.put("avatarUrl", avatarUrl);
+            log.info("🔄 Updating user profile - userId: {}, displayName: {}", userId, displayName);
 
-            String body = objectMapper.writeValueAsString(request);
-            log.info("🔄 Updating user profile - Body: {}", body);
-
-            // Try different endpoints - backend may use different patterns
-            String[] endpoints = {
-                    "/api/users/me", // Most common - update current user
-                    "/api/users/" + userId, // Update by ID
-                    "/api/users/profile" // Profile endpoint
-            };
-
-            Exception lastException = null;
-            for (String endpoint : endpoints) {
-                try {
-                    log.info("🔄 Trying endpoint: {}", endpoint);
-                    put(endpoint, body, true);
-                    log.info("✅ User profile updated successfully via {}", endpoint);
-                    return true;
-                } catch (Exception e) {
-                    log.warn("⚠️ Endpoint {} failed: {}", endpoint, e.getMessage());
-                    lastException = e;
-                }
+            // Build form data string for PUT request
+            StringBuilder formData = new StringBuilder();
+            if (displayName != null && !displayName.isEmpty()) {
+                formData.append("displayName=").append(java.net.URLEncoder.encode(displayName, "UTF-8"));
             }
 
-            if (lastException != null) {
-                throw lastException;
-            }
-            return false;
+            String endpoint = "/api/users/" + userId;
+            String formDataStr = formData.toString();
+
+            log.info("🔄 Sending PUT to {} with form data: {}", endpoint, formDataStr);
+
+            // Use form-urlencoded content type
+            putFormData(endpoint, formDataStr, true);
+            log.info("✅ User profile updated successfully");
+            return true;
 
         } catch (Exception e) {
             log.error("❌ Failed to update user profile: " + e.getMessage(), e);
             return false;
         }
+    }
+
+    /**
+     * 🌐 PUT request with form data (application/x-www-form-urlencoded)
+     */
+    private String putFormData(String endpoint, String formData, boolean authenticated) throws Exception {
+        URL url = new URL(baseUrl + endpoint);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+
+        conn.setRequestMethod("PUT");
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        conn.setDoOutput(true);
+
+        if (authenticated && jwtToken != null) {
+            conn.setRequestProperty("Authorization", "Bearer " + jwtToken);
+        }
+
+        try (OutputStream os = conn.getOutputStream()) {
+            os.write(formData.getBytes("UTF-8"));
+            os.flush();
+        }
+
+        int responseCode = conn.getResponseCode();
+        log.info("🔄 PUT form data response code: {}", responseCode);
+
+        if (responseCode != 200 && responseCode != 201) {
+            String errorMsg = "HTTP " + responseCode;
+            try {
+                InputStream errorStream = conn.getErrorStream();
+                if (errorStream != null) {
+                    String errorResponse = readResponse(errorStream);
+                    if (!errorResponse.isEmpty()) {
+                        errorMsg += " - " + errorResponse;
+                    }
+                }
+            } catch (Exception e) {
+                // Ignore error reading error stream
+            }
+            throw new Exception(errorMsg);
+        }
+
+        return readResponse(conn.getInputStream());
     }
 
     /**

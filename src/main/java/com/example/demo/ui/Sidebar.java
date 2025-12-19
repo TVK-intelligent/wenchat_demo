@@ -470,6 +470,15 @@ public class Sidebar extends VBox {
         }
     }
 
+    /**
+     * Set current user's avatar from URL
+     */
+    public void setCurrentUserAvatar(String avatarUrl, String username) {
+        if (userAvatar != null) {
+            com.example.demo.util.AvatarUtils.setAvatarOnCircleAsync(userAvatar, avatarUrl, username, 35);
+        }
+    }
+
     public void setOnlineCount(int count) {
         onlineCountLabel.setText(String.valueOf(count));
     }

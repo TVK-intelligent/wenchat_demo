@@ -2,6 +2,7 @@ package com.example.demo.ui;
 
 import com.example.demo.client.model.User;
 import com.example.demo.client.service.ChatService;
+import com.example.demo.util.AvatarUtils;
 import com.example.demo.client.service.NotificationService;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -18,7 +19,7 @@ import java.io.File;
 import java.util.function.Consumer;
 
 /**
- * Settings Dialog - Application settings, user preferences, and theme toggle
+ * Settings Dialog - User preferences and account settings
  */
 @Slf4j
 public class SettingsDialog extends Stage {
@@ -35,9 +36,10 @@ public class SettingsDialog extends Stage {
     private Button uploadAvatarButton;
     private Label avatarLabel;
     private Label statusLabel;
-
-    // Theme toggle
     private ToggleButton themeToggle;
+    private Circle avatarPreviewCircle;
+
+    // Theme settings
     private static boolean isDarkTheme = false;
     private static Consumer<Boolean> themeChangeCallback;
 
@@ -57,10 +59,9 @@ public class SettingsDialog extends Stage {
         setHeight(700);
 
         initComponents();
+        Scene scene = new Scene(createLayout());
         loadCurrentSettings();
         setupEventHandlers();
-
-        Scene scene = new Scene(createLayout());
         if (getClass().getResource("/styles.css") != null) {
             scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
         }
@@ -226,6 +227,10 @@ public class SettingsDialog extends Stage {
         HBox avatarBox = new HBox(12);
         avatarBox.setAlignment(Pos.CENTER_LEFT);
 
+        // Avatar preview circle
+        avatarPreviewCircle = new Circle(30);
+        avatarPreviewCircle.setStyle("-fx-stroke: #667eea; -fx-stroke-width: 2;");
+
         VBox avatarInfo = new VBox(4);
         Label avatarTitle = new Label("Ảnh đại diện:");
         avatarTitle.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
@@ -234,7 +239,7 @@ public class SettingsDialog extends Stage {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        avatarBox.getChildren().addAll(avatarInfo, spacer, uploadAvatarButton);
+        avatarBox.getChildren().addAll(avatarPreviewCircle, avatarInfo, spacer, uploadAvatarButton);
 
         content.getChildren().addAll(
                 displayNameLabel, displayNameField,
@@ -324,6 +329,10 @@ public class SettingsDialog extends Stage {
 
                 showOnlineStatusCheckBox.setSelected(
                         currentUser.getShowOnlineStatus() != null ? currentUser.getShowOnlineStatus() : true);
+
+                // Load avatar preview
+                AvatarUtils.setAvatarOnCircleAsync(avatarPreviewCircle, currentUser.getAvatarUrl(),
+                        currentUser.getUsername(), 30);
 
                 if (currentUser.getAvatarUrl() != null && !currentUser.getAvatarUrl().isEmpty()) {
                     avatarLabel.setText("✅ Đã có ảnh đại diện");
@@ -431,9 +440,15 @@ public class SettingsDialog extends Stage {
                 if (success) {
                     User updatedUser = chatService.getCurrentUser();
                     if (updatedUser != null) {
+                        currentUser = updatedUser;
                         avatarUrlField.setText(updatedUser.getAvatarUrl() != null ? updatedUser.getAvatarUrl() : "");
                         avatarLabel.setText("✅ Đã có ảnh đại diện");
                         avatarLabel.setStyle("-fx-text-fill: #28a745; -fx-font-size: 12px;");
+
+                        // Refresh avatar preview
+                        AvatarUtils.setAvatarOnCircleAsync(avatarPreviewCircle, updatedUser.getAvatarUrl(),
+                                updatedUser.getUsername(), 30);
+
                         showSuccess("Thành công", "Ảnh đại diện đã được cập nhật!");
                     }
                 } else {

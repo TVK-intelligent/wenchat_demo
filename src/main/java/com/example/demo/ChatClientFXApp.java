@@ -516,6 +516,9 @@ public class ChatClientFXApp extends Application {
             chatService = new ChatService(serverUrl);
             webSocketClient = new WebSocketClient(serverUrl);
 
+            // Configure AvatarUtils with server base URL
+            com.example.demo.util.AvatarUtils.setBaseUrl(serverUrl);
+
         } catch (Exception e) {
             log.error("❌ Error initializing chat client: {}", e.getMessage(), e);
             appendMessage("❌ Lỗi kết nối: " + e.getMessage());
@@ -604,6 +607,10 @@ public class ChatClientFXApp extends Application {
                     // Update UI status
                     contentArea.setOnlineStatus(true);
                     sidebar.setCurrentUser(currentUsername);
+                    // Load user avatar on sidebar
+                    if (currentUser != null) {
+                        sidebar.setCurrentUserAvatar(currentUser.getAvatarUrl(), currentUsername);
+                    }
                     loginSuccess[0] = true;
                     // Allow dialog to close
                 } else {

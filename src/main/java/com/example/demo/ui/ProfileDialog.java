@@ -2,12 +2,12 @@ package com.example.demo.ui;
 
 import com.example.demo.client.model.User;
 import com.example.demo.client.service.ChatService;
+import com.example.demo.util.AvatarUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -102,8 +102,12 @@ public class ProfileDialog extends Stage {
         profileCard.getStyleClass().add("profile-card");
         profileCard.setAlignment(Pos.CENTER);
 
-        // Avatar
-        avatarCircle.setFill(Color.color(Math.random(), Math.random(), Math.random()));
+        // Avatar - load from URL or use fallback color
+        if (profileUser != null) {
+            log.info("📷 ProfileDialog loading avatar - username: {}, avatarUrl: {}",
+                    profileUser.getUsername(), profileUser.getAvatarUrl());
+            AvatarUtils.setAvatarOnCircleAsync(avatarCircle, profileUser.getAvatarUrl(), profileUser.getUsername(), 50);
+        }
 
         // User info
         VBox infoBox = new VBox(15);
