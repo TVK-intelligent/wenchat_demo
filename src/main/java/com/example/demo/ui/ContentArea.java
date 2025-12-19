@@ -634,28 +634,28 @@ public class ContentArea extends BorderPane {
         if (isMine) {
             if (isDarkMode) {
                 fileCard.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); " +
                                 "-fx-background-radius: 16 16 4 16; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(59,130,246,0.5), 10, 0, 0, 4);");
+                                "-fx-effect: dropshadow(gaussian, rgba(37,99,235,0.6), 12, 0, 0, 5);");
             } else {
                 fileCard.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); " +
                                 "-fx-background-radius: 16 16 4 16; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(102,126,234,0.3), 8, 0, 0, 3);");
+                                "-fx-effect: dropshadow(gaussian, rgba(79,70,229,0.5), 10, 0, 0, 4);");
             }
         } else {
             if (isDarkMode) {
                 fileCard.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #4b5563 0%, #6b7280 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #374151 0%, #4b5563 100%); " +
                                 "-fx-background-radius: 16 16 16 4; " +
-                                "-fx-border-color: #9ca3af; -fx-border-width: 1; -fx-border-radius: 16 16 16 4; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.6), 12, 0, 0, 4);");
+                                "-fx-border-color: #6b7280; -fx-border-width: 2; -fx-border-radius: 16 16 16 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.7), 14, 0, 0, 5);");
             } else {
                 fileCard.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
                                 "-fx-background-radius: 16 16 16 4; " +
-                                "-fx-border-color: #cbd5e1; -fx-border-width: 1.5; -fx-border-radius: 16 16 16 4; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 8, 0, 0, 3);");
+                                "-fx-border-color: #818cf8; -fx-border-width: 2; -fx-border-radius: 16 16 16 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
             }
         }
 
