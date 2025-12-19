@@ -605,6 +605,7 @@ public class ChatClientFXApp extends Application {
                     webSocketClient.subscribeToFriendRequests(this::handleFriendRequestNotification);
                     webSocketClient.subscribeToRoomInvites(this::handleRoomInviteNotification);
                     webSocketClient.subscribeToPrivateMessages(this::handlePrivateMessageNotification);
+                    webSocketClient.subscribeToUserStatus(this::handleUserStatusUpdate);
 
                     // Update UI status
                     contentArea.setOnlineStatus(true);
@@ -755,13 +756,16 @@ public class ChatClientFXApp extends Application {
     }
 
     private void loadOnlineUsers() {
+        log.info("🔄 Starting loadOnlineUsers...");
         try {
             List<User> onlineUsers = chatService.getOnlineUsers();
+            log.info("📋 Got {} online users from API", onlineUsers != null ? onlineUsers.size() : 0);
             if (onlineUsers != null) {
                 sidebar.loadOnlineUsers(onlineUsers);
+                log.info("✅ Online users loaded to sidebar");
             }
         } catch (Exception e) {
-            log.error("Error loading online users", e);
+            log.error("❌ Error loading online users", e);
             appendMessage("❌ Lỗi khi tải danh sách người dùng online: " + e.getMessage());
         }
     }
@@ -775,8 +779,13 @@ public class ChatClientFXApp extends Application {
             if (friendsData != null && !friendsData.isEmpty()) {
                 List<User> friends = new ArrayList<>();
                 for (java.util.Map<String, Object> data : friendsData) {
+                    Long friendId = Long.valueOf(data.get("id").toString());
+                    // Skip current user - don't show yourself in friends list
+                    if (currentUserId != null && friendId.equals(currentUserId)) {
+                        continue;
+                    }
                     User friend = new User();
-                    friend.setId(Long.valueOf(data.get("id").toString()));
+                    friend.setId(friendId);
                     friend.setUsername((String) data.get("username"));
                     friend.setDisplayName((String) data.get("displayName"));
                     friend.setAvatarUrl((String) data.get("avatarUrl"));
@@ -1112,6 +1121,22 @@ public class ChatClientFXApp extends Application {
                 sidebar.incrementUnreadCount(message.getSenderId());
             });
         }
+    }
+
+    /**
+     * Handle user status update (online/offline) in real-time
+     */
+    private void handleUserStatusUpdate(com.example.demo.client.model.UserStatusMessage statusMessage) {
+        if (statusMessage == null)
+            return;
+
+        log.info("User status update: {} is now {}", statusMessage.getUsername(), statusMessage.getStatus());
+
+        Platform.runLater(() -> {
+            // Update friend status in sidebar
+            sidebar.updateFriendStatus(statusMessage.getUserId(),
+                    "ONLINE".equals(statusMessage.getStatus()) || Boolean.TRUE.equals(statusMessage.getIsOnline()));
+        });
     }
 
     private void appendMessage(String message) {

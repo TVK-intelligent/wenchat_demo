@@ -274,9 +274,20 @@ public class FriendsManagementDialog extends Stage {
             List<Map<String, Object>> friends = chatService.getFriends();
             friendsList.getItems().clear();
 
+            // Get current user to filter out self
+            User currentUser = chatService.getCurrentUser();
+            Long currentUserId = currentUser != null ? currentUser.getId() : null;
+
             for (Map<String, Object> friend : friends) {
+                Long friendId = Long.valueOf(friend.get("id").toString());
+
+                // Skip current user - don't show yourself in friends list
+                if (currentUserId != null && friendId.equals(currentUserId)) {
+                    continue;
+                }
+
                 User user = new User();
-                user.setId(Long.valueOf(friend.get("id").toString()));
+                user.setId(friendId);
                 user.setUsername((String) friend.get("username"));
                 user.setDisplayName((String) friend.get("displayName"));
                 user.setAvatarUrl((String) friend.get("avatarUrl"));

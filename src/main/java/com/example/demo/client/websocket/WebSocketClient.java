@@ -52,6 +52,9 @@ public class WebSocketClient {
     private CountDownLatch connectionLatch;
     private boolean connected = false;
 
+    // Heartbeat scheduler to keep user ONLINE status
+    private java.util.concurrent.ScheduledExecutorService heartbeatScheduler;
+
     public WebSocketClient(String serverUrl) {
         this.serverUrl = serverUrl;
         objectMapper.registerModule(new JavaTimeModule());
@@ -90,9 +93,15 @@ public class WebSocketClient {
 
                 if (currentUserId != null) {
                     try {
-                        stompSession.send("/app/register-session", currentUserId.toString());
+                        Map<String, Object> registrationMessage = new HashMap<>();
+                        registrationMessage.put("userId", currentUserId);
+                        registrationMessage.put("username", currentUsername);
+                        String json = objectMapper.writeValueAsString(registrationMessage);
+                        stompSession.send("/app/register-session",
+                                json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        log.info("✅ User registered on connect: {}", currentUserId);
                     } catch (Exception e) {
-                        System.err.println("Failed to send user registration: " + e.getMessage());
+                        log.warn("Failed to register on connect: {}", e.getMessage());
                     }
                 }
             } else {
@@ -487,6 +496,9 @@ public class WebSocketClient {
     }
 
     public void disconnect() {
+        // Stop heartbeat first
+        stopHeartbeat();
+
         if (stompSession != null) {
             try {
                 stompSession.disconnect();
@@ -508,15 +520,71 @@ public class WebSocketClient {
      */
     public void registerSession() {
         if (stompSession == null || !connected || currentUserId == null) {
-            log.warn("Cannot register session: not connected or no user ID");
+            log.warn("Cannot register session: stompSession={}, connected={}, userId={}",
+                    stompSession != null, connected, currentUserId);
             return;
         }
 
         try {
-            stompSession.send("/app/register-session", currentUserId.toString());
-            log.info("User session registered for userId: {}", currentUserId);
+            // Send as JSON bytes like other send methods
+            Map<String, Object> registrationMessage = new HashMap<>();
+            registrationMessage.put("userId", currentUserId);
+            registrationMessage.put("username", currentUsername);
+
+            String json = objectMapper.writeValueAsString(registrationMessage);
+            stompSession.send("/app/register-session", json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            log.info("✅ User session registered for userId: {}", currentUserId);
+
+            // Start heartbeat after successful registration
+            startHeartbeat();
         } catch (Exception e) {
-            log.error("Failed to send user registration: {}", e.getMessage());
+            log.error("❌ Failed to send user registration: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 💓 Start heartbeat scheduler to keep user ONLINE
+     * Sends heartbeat every 12 seconds as required by backend
+     */
+    private void startHeartbeat() {
+        if (heartbeatScheduler != null) {
+            heartbeatScheduler.shutdownNow();
+        }
+
+        heartbeatScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        heartbeatScheduler.scheduleAtFixedRate(
+                this::sendHeartbeat,
+                0, // Initial delay
+                12, // Period - backend expects heartbeat every 12 seconds
+                java.util.concurrent.TimeUnit.SECONDS);
+        log.info("💓 Heartbeat scheduler started (every 12 seconds)");
+    }
+
+    /**
+     * 💓 Send heartbeat to keep user ONLINE
+     */
+    private void sendHeartbeat() {
+        if (stompSession == null || !connected || currentUserId == null) {
+            return;
+        }
+
+        try {
+            stompSession.send("/app/heartbeat",
+                    currentUserId.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            log.debug("💓 Heartbeat sent for userId: {}", currentUserId);
+        } catch (Exception e) {
+            log.warn("💔 Failed to send heartbeat: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 🛑 Stop heartbeat scheduler
+     */
+    public void stopHeartbeat() {
+        if (heartbeatScheduler != null) {
+            heartbeatScheduler.shutdownNow();
+            heartbeatScheduler = null;
+            log.info("💔 Heartbeat scheduler stopped");
         }
     }
 

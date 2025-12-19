@@ -157,12 +157,46 @@ public class ChatService {
     public List<User> getOnlineUsers() {
         try {
             String response = get("/api/users/online", true);
-            List<User> users = objectMapper.readValue(response,
-                    TypeFactory.defaultInstance().constructCollectionType(List.class, User.class));
+            log.info("📥 Online users response: {}", response);
+
+            // Parse as raw maps first to debug
+            List<java.util.Map<String, Object>> userMaps = objectMapper.readValue(response,
+                    TypeFactory.defaultInstance().constructCollectionType(List.class, java.util.Map.class));
+
+            List<User> users = new ArrayList<>();
+            for (java.util.Map<String, Object> map : userMaps) {
+                if (map != null) {
+                    User user = new User();
+                    if (map.get("id") != null) {
+                        user.setId(Long.valueOf(map.get("id").toString()));
+                    }
+                    user.setUsername((String) map.get("username"));
+                    user.setDisplayName((String) map.get("displayName"));
+                    user.setAvatarUrl((String) map.get("avatarUrl"));
+
+                    // Parse status
+                    String statusStr = map.get("status") != null ? map.get("status").toString() : null;
+                    if (statusStr != null) {
+                        try {
+                            user.setStatus(User.Status.valueOf(statusStr));
+                        } catch (Exception e) {
+                            user.setStatus(User.Status.ONLINE); // Default for online users list
+                        }
+                    } else {
+                        user.setStatus(User.Status.ONLINE);
+                    }
+
+                    users.add(user);
+                    log.debug("Parsed online user: id={}, username={}, status={}",
+                            user.getId(), user.getUsername(), user.getStatus());
+                }
+            }
+
+            log.info("✅ Parsed {} online users", users.size());
             return users;
 
         } catch (Exception e) {
-            log.error("Failed to fetch users: " + e.getMessage());
+            log.error("❌ Failed to fetch online users: " + e.getMessage(), e);
             return new ArrayList<>();
         }
     }

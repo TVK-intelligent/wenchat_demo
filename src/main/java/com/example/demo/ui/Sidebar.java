@@ -448,14 +448,22 @@ public class Sidebar extends VBox {
      */
     public void loadOnlineUsers(List<com.example.demo.client.model.User> users) {
         userListView.getItems().clear();
+        System.out.println("🔍 loadOnlineUsers called with " + (users != null ? users.size() : 0) + " users");
         if (users != null && !users.isEmpty()) {
+            int addedCount = 0;
             for (com.example.demo.client.model.User user : users) {
+                System.out.println("🔍 Processing user: " + user);
                 if (user != null) {
                     String displayName = user.getDisplayName() != null ? user.getDisplayName()
                             : (user.getUsername() != null ? user.getUsername() : "Unknown User");
+                    System.out.println("🔍 Adding to list: " + displayName);
                     userListView.getItems().add(displayName);
+                    addedCount++;
+                } else {
+                    System.out.println("⚠️ User object is null!");
                 }
             }
+            System.out.println("✅ Added " + addedCount + " users to list");
             onlineCountLabel.setText(String.valueOf(users.size()));
         } else {
             onlineCountLabel.setText("0");
@@ -491,6 +499,26 @@ public class Sidebar extends VBox {
     public void removeUser(String username) {
         userListView.getItems().remove(username);
         setOnlineCount(userListView.getItems().size());
+    }
+
+    /**
+     * Update friend online/offline status in real-time
+     * Called when receiving WebSocket user status updates
+     */
+    public void updateFriendStatus(Long userId, boolean isOnline) {
+        if (loadedFriends == null)
+            return;
+
+        // Find and update the friend's status
+        for (com.example.demo.client.model.User friend : loadedFriends) {
+            if (friend.getId().equals(userId)) {
+                friend.setStatus(isOnline ? com.example.demo.client.model.User.Status.ONLINE
+                        : com.example.demo.client.model.User.Status.OFFLINE);
+                // Refresh the list to update the status indicator
+                friendsListView.refresh();
+                break;
+            }
+        }
     }
 
     // Event handler setters
@@ -668,15 +696,33 @@ public class Sidebar extends VBox {
                 infoBox.getChildren().addAll(nameLabel, lastMsgLabel);
                 HBox.setHgrow(infoBox, Priority.ALWAYS);
 
-                // Online indicator with bright glow
+                // Check online status from loadedFriends
+                boolean isOnline = false;
+                if (loadedFriends != null) {
+                    for (com.example.demo.client.model.User friend : loadedFriends) {
+                        String displayName = friend.getDisplayName() != null ? friend.getDisplayName()
+                                : friend.getUsername();
+                        if (displayName.equals(friendName)) {
+                            isOnline = friend.getStatus() == com.example.demo.client.model.User.Status.ONLINE;
+                            break;
+                        }
+                    }
+                }
+
+                // Online/Offline indicator based on actual status
                 VBox statusBox = new VBox(2);
                 statusBox.setAlignment(Pos.CENTER);
-                Circle onlineIndicator = new Circle(7);
-                onlineIndicator.setFill(Color.web("#4ade80"));
-                onlineIndicator.setEffect(new DropShadow(10, Color.web("#4ade80")));
-                Label onlineLabel = new Label("🟢");
-                onlineLabel.setStyle("-fx-font-size: 8px;");
-                statusBox.getChildren().add(onlineIndicator);
+                Circle statusIndicator = new Circle(7);
+                if (isOnline) {
+                    // Online - green with glow
+                    statusIndicator.setFill(Color.web("#4ade80"));
+                    statusIndicator.setEffect(new DropShadow(10, Color.web("#4ade80")));
+                } else {
+                    // Offline - gray without glow
+                    statusIndicator.setFill(Color.web("#9ca3af"));
+                    statusIndicator.setEffect(new DropShadow(4, Color.web("#00000020")));
+                }
+                statusBox.getChildren().add(statusIndicator);
 
                 friendBox.getChildren().addAll(avatarPane, infoBox, statusBox);
 
