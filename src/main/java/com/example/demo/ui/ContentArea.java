@@ -569,7 +569,9 @@ public class ContentArea extends BorderPane {
 
             boolean isMine = msg.getSenderUsername() != null && msg.getSenderUsername().equals(currentUsername);
 
-            if (msg.getMessageType() == com.example.demo.client.model.ChatMessage.MessageType.FILE) {
+            // Only treat as file message if messageType is FILE AND fileName is not null
+            if (msg.getMessageType() == com.example.demo.client.model.ChatMessage.MessageType.FILE
+                    && msg.getFileName() != null && !msg.getFileName().isEmpty()) {
                 addFileMessage(displayName, msg.getFileName(), msg.getContent(), msg.getTimestamp(), isMine);
             } else {
                 addMessage(displayName, msg.getContent(), msg.getTimestamp(), isMine);
@@ -669,8 +671,11 @@ public class ContentArea extends BorderPane {
         }
         iconBg.setEffect(new DropShadow(4, Color.web("#00000020")));
 
-        // Determine file icon based on extension
-        String fileExt = fileName.contains(".") ? fileName.substring(fileName.lastIndexOf(".") + 1).toLowerCase() : "";
+        // Determine file icon based on extension (with null check)
+        String safeFileName = fileName != null ? fileName : "file";
+        String fileExt = safeFileName.contains(".")
+                ? safeFileName.substring(safeFileName.lastIndexOf(".") + 1).toLowerCase()
+                : "";
         String iconEmoji = getFileIcon(fileExt);
         Label fileIcon = new Label(iconEmoji);
         fileIcon.setStyle("-fx-font-size: 18px;");
@@ -680,7 +685,7 @@ public class ContentArea extends BorderPane {
         VBox fileInfo = new VBox(3);
         fileInfo.setMaxWidth(160);
 
-        Label fileLabel = new Label(fileName);
+        Label fileLabel = new Label(safeFileName);
         fileLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; " +
                 (isMine ? "-fx-text-fill: white;"
                         : (isDarkMode ? "-fx-text-fill: #f1f5f9;" : "-fx-text-fill: #212529;")));

@@ -491,6 +491,23 @@ public class ChatService {
                 msg.setSenderDisplayName((String) map.get("senderDisplayName"));
                 msg.setContent((String) map.get("content"));
                 msg.setTimestamp(LocalDateTime.parse((String) map.get("createdAt")));
+
+                // Parse message type correctly (fix: was missing, causing file messages to show
+                // as text)
+                String messageTypeStr = (String) map.get("messageType");
+                if (messageTypeStr != null) {
+                    try {
+                        msg.setMessageType(ChatMessage.MessageType.valueOf(messageTypeStr));
+                    } catch (IllegalArgumentException e) {
+                        msg.setMessageType(ChatMessage.MessageType.TEXT);
+                    }
+                } else {
+                    msg.setMessageType(ChatMessage.MessageType.TEXT);
+                }
+
+                // Parse fileName for file messages
+                msg.setFileName((String) map.get("fileName"));
+
                 msg.setRecalled((Boolean) map.getOrDefault("recalled", false));
                 messages.add(msg);
             }

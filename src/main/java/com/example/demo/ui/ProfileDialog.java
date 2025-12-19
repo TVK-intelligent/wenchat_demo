@@ -43,7 +43,7 @@ public class ProfileDialog extends Stage {
         setTitle("👤 " + (isOwnProfile ? "Profile của bạn" : "Profile"));
         setResizable(false);
         setWidth(400);
-        setHeight(450);
+        setHeight(500);
 
         initComponents();
         loadProfileData();
