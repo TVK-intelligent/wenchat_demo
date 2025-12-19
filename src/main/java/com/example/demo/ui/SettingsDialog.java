@@ -122,7 +122,13 @@ public class SettingsDialog extends Stage {
     private VBox createLayout() {
         VBox mainLayout = new VBox(20);
         mainLayout.setPadding(new Insets(25));
-        mainLayout.setStyle("-fx-background-color: #ffffff;");
+
+        // Apply dark/light theme colors
+        String bgColor = isDarkTheme ? "#1e293b" : "#ffffff";
+        String textColor = isDarkTheme ? "#e2e8f0" : "#212529";
+
+        mainLayout.setStyle("-fx-background-color: " + bgColor + ";");
+        ;
 
         // Title with icon
         HBox titleBox = new HBox(12);
@@ -136,7 +142,7 @@ public class SettingsDialog extends Stage {
         StackPane iconPane = new StackPane(titleIcon, iconLabel);
 
         Label titleLabel = new Label("Cài đặt");
-        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529;");
+        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: " + textColor + ";");
 
         titleBox.getChildren().addAll(iconPane, titleLabel);
 
@@ -178,7 +184,7 @@ public class SettingsDialog extends Stage {
         // Wrap in ScrollPane for scrolling when content exceeds height
         ScrollPane scrollPane = new ScrollPane(mainLayout);
         scrollPane.setFitToWidth(true);
-        scrollPane.setStyle("-fx-background-color: #ffffff; -fx-background: #ffffff;");
+        scrollPane.setStyle("-fx-background-color: " + bgColor + "; -fx-background: " + bgColor + ";");
         scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
 
         VBox wrapper = new VBox(scrollPane);
@@ -187,14 +193,19 @@ public class SettingsDialog extends Stage {
     }
 
     private VBox createSection(String title, VBox content) {
+        // Apply dark/light theme colors to sections
+        String sectionBg = isDarkTheme ? "#374151" : "#f8f9fa";
+        String sectionBorder = isDarkTheme ? "#4b5563" : "#e9ecef";
+        String sectionTextColor = isDarkTheme ? "#f9fafb" : "#495057";
+
         VBox section = new VBox(12);
         section.setPadding(new Insets(15));
         section.setStyle(
-                "-fx-background-color: #f8f9fa; -fx-background-radius: 12; " +
-                        "-fx-border-color: #e9ecef; -fx-border-radius: 12;");
+                "-fx-background-color: " + sectionBg + "; -fx-background-radius: 12; " +
+                        "-fx-border-color: " + sectionBorder + "; -fx-border-radius: 12;");
 
         Label sectionTitle = new Label(title);
-        sectionTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #495057;");
+        sectionTitle.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " + sectionTextColor + ";");
 
         section.getChildren().addAll(sectionTitle, content);
         return section;

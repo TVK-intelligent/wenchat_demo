@@ -138,9 +138,15 @@ public class RoomManagementDialog extends Stage {
     }
 
     private VBox createLayout() {
+        // Check dark mode state
+        boolean isDark = SettingsDialog.isDarkTheme();
+        String bgColor = isDark ? "#1e293b" : "#ffffff";
+        String textColor = isDark ? "#e2e8f0" : "#212529";
+        String mutedColor = isDark ? "#9ca3af" : "#6c757d";
+
         VBox mainLayout = new VBox(20);
         mainLayout.setPadding(new Insets(25));
-        mainLayout.setStyle("-fx-background-color: #ffffff;");
+        mainLayout.setStyle("-fx-background-color: " + bgColor + ";");
 
         // Header with gradient icon
         HBox headerBox = new HBox(15);
@@ -158,9 +164,9 @@ public class RoomManagementDialog extends Stage {
 
         VBox titleBox = new VBox(2);
         Label titleLabel = new Label("Quản lý Phòng Chat");
-        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529;");
+        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: " + textColor + ";");
         Label subtitleLabel = new Label("Tạo, tham gia và quản lý các phòng chat");
-        subtitleLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
+        subtitleLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + mutedColor + ";");
         titleBox.getChildren().addAll(titleLabel, subtitleLabel);
 
         headerBox.getChildren().addAll(iconPane, titleBox);
@@ -283,6 +289,13 @@ public class RoomManagementDialog extends Stage {
     }
 
     private VBox createRoomTab() {
+        // Check dark mode state
+        boolean isDark = SettingsDialog.isDarkTheme();
+        String textColor = isDark ? "#e2e8f0" : "#495057";
+        String infoBg = isDark ? "#1e3a5f" : "#e7f5ff";
+        String infoBorder = isDark ? "#3b82f6" : "#74c0fc";
+        String infoText = isDark ? "#93c5fd" : "#1971c2";
+
         VBox tabContent = new VBox(15);
         tabContent.setPadding(new Insets(15));
 
@@ -290,21 +303,25 @@ public class RoomManagementDialog extends Stage {
         HBox infoCard = new HBox(15);
         infoCard.setPadding(new Insets(12));
         infoCard.setStyle(
-                "-fx-background-color: #e7f5ff; -fx-background-radius: 10; " +
-                        "-fx-border-color: #74c0fc; -fx-border-radius: 10;");
+                "-fx-background-color: " + infoBg + "; -fx-background-radius: 10; " +
+                        "-fx-border-color: " + infoBorder + "; -fx-border-radius: 10;");
         Label infoIcon = new Label("💡");
         infoIcon.setStyle("-fx-font-size: 16px;");
-        Label infoText = new Label("Tạo phòng mới để chat với bạn bè. Phòng riêng tư chỉ có thể tham gia qua lời mời.");
-        infoText.setStyle("-fx-text-fill: #1971c2; -fx-font-size: 12px;");
-        infoText.setWrapText(true);
-        infoCard.getChildren().addAll(infoIcon, infoText);
-        HBox.setHgrow(infoText, Priority.ALWAYS);
+        Label infoTextLabel = new Label(
+                "Tạo phòng mới để chat với bạn bè. Phòng riêng tư chỉ có thể tham gia qua lời mời.");
+        infoTextLabel.setStyle("-fx-text-fill: " + infoText + "; -fx-font-size: 12px;");
+        infoTextLabel.setWrapText(true);
+        infoCard.getChildren().addAll(infoIcon, infoTextLabel);
+        HBox.setHgrow(infoTextLabel, Priority.ALWAYS);
 
         Label nameLabel = new Label("Tên phòng:");
-        nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
+        nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + textColor + ";");
 
         Label descLabel = new Label("Mô tả:");
-        descLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
+        descLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + textColor + ";");
+
+        // Update checkbox style for dark mode
+        privateRoomCheckBox.setStyle("-fx-font-size: 13px; -fx-text-fill: " + textColor + ";");
 
         tabContent.getChildren().addAll(
                 infoCard,

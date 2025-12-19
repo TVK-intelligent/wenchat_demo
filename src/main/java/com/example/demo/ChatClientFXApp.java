@@ -234,6 +234,7 @@ public class ChatClientFXApp extends Application {
                 }
                 root.setStyle("-fx-background-color: #1a1a2e;");
                 contentArea.applyDarkMode(true);
+                sidebar.applyDarkMode(true);
             } else {
                 // Remove dark-theme class from all containers
                 root.getStyleClass().remove("dark-theme");
@@ -241,6 +242,7 @@ public class ChatClientFXApp extends Application {
                 contentArea.getStyleClass().remove("dark-theme");
                 root.setStyle("-fx-background-color: #f0f2f5;");
                 contentArea.applyDarkMode(false);
+                sidebar.applyDarkMode(false);
             }
         });
     }

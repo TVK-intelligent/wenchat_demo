@@ -795,4 +795,70 @@ public class Sidebar extends VBox {
                         "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 8, 0, 0, 3);"));
         return btn;
     }
+
+    /**
+     * Apply dark mode styling to sidebar components
+     */
+    public void applyDarkMode(boolean isDark) {
+        if (isDark) {
+            // Dark mode - tối màu nền sidebar
+            setStyle("-fx-background-color: linear-gradient(180deg, #1e293b 0%, #0f172a 100%); " +
+                    "-fx-padding: 20 15 20 15; " +
+                    "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 10, 0, 2, 0);");
+
+            // Update list views
+            if (friendsListView != null) {
+                friendsListView.setStyle(
+                        "-fx-background-color: rgba(30,41,59,0.95); " +
+                                "-fx-background-radius: 12; -fx-border-radius: 12; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 8, 0, 0, 3);");
+            }
+            if (userListView != null) {
+                userListView.setStyle(
+                        "-fx-background-color: rgba(30,41,59,0.95); " +
+                                "-fx-background-radius: 12; -fx-border-radius: 12; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 8, 0, 0, 3);");
+            }
+            if (roomSelector != null) {
+                roomSelector.setStyle(
+                        "-fx-background-color: #1e293b; -fx-font-size: 13px; -fx-font-weight: bold; " +
+                                "-fx-background-radius: 10; -fx-border-radius: 10; " +
+                                "-fx-text-fill: #e2e8f0; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 5, 0, 0, 2);");
+            }
+        } else {
+            // Light mode - màu sáng gradient tím
+            setStyle("-fx-background-color: linear-gradient(180deg, #667eea 0%, #764ba2 100%); " +
+                    "-fx-padding: 20 15 20 15; " +
+                    "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 2, 0);");
+
+            // Update list views
+            if (friendsListView != null) {
+                friendsListView.setStyle(
+                        "-fx-background-color: rgba(255,255,255,0.95); " +
+                                "-fx-background-radius: 12; -fx-border-radius: 12; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 8, 0, 0, 3);");
+            }
+            if (userListView != null) {
+                userListView.setStyle(
+                        "-fx-background-color: rgba(255,255,255,0.95); " +
+                                "-fx-background-radius: 12; -fx-border-radius: 12; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 8, 0, 0, 3);");
+            }
+            if (roomSelector != null) {
+                roomSelector.setStyle(
+                        "-fx-background-color: white; -fx-font-size: 13px; -fx-font-weight: bold; " +
+                                "-fx-background-radius: 10; -fx-border-radius: 10; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 5, 0, 0, 2);");
+            }
+        }
+
+        // Refresh list views to apply new cell styles
+        if (friendsListView != null) {
+            friendsListView.refresh();
+        }
+        if (userListView != null) {
+            userListView.refresh();
+        }
+    }
 }

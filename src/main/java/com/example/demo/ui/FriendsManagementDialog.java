@@ -95,12 +95,13 @@ public class FriendsManagementDialog extends Stage {
         searchResultsList.setPrefHeight(180);
         searchResultsList.setCellFactory(param -> new UserSearchCell());
 
-        // Buttons
-        addFriendButton = new Button("➕ Gửi lời mời kết bạn");
+        // Buttons - Nút gửi lời mời nổi bật với màu đỏ đậm
+        addFriendButton = new Button("🔥 Gửi lời mời kết bạn");
         addFriendButton.setStyle(
-                "-fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%); " +
-                        "-fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20; " +
-                        "-fx-background-radius: 20; -fx-cursor: hand;");
+                "-fx-background-color: #dc2626; " +
+                        "-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14px; -fx-padding: 12 25; " +
+                        "-fx-background-radius: 25; -fx-cursor: hand; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(220,38,38,0.6), 12, 0, 0, 4);");
         addFriendButton.setDisable(true);
 
         refreshButton = new Button("🔄 Làm mới");
@@ -110,9 +111,15 @@ public class FriendsManagementDialog extends Stage {
     }
 
     private VBox createLayout() {
+        // Check dark mode state
+        boolean isDark = SettingsDialog.isDarkTheme();
+        String bgColor = isDark ? "#1e293b" : "#ffffff";
+        String textColor = isDark ? "#e2e8f0" : "#212529";
+        String mutedColor = isDark ? "#9ca3af" : "#6c757d";
+
         VBox mainLayout = new VBox(20);
         mainLayout.setPadding(new Insets(25));
-        mainLayout.setStyle("-fx-background-color: #ffffff;");
+        mainLayout.setStyle("-fx-background-color: " + bgColor + ";");
 
         // Header with gradient icon
         HBox headerBox = new HBox(15);
@@ -130,9 +137,9 @@ public class FriendsManagementDialog extends Stage {
 
         VBox titleBox = new VBox(2);
         Label titleLabel = new Label("Quản lý Bạn bè");
-        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: #212529;");
+        titleLabel.setStyle("-fx-font-size: 22px; -fx-font-weight: bold; -fx-text-fill: " + textColor + ";");
         Label subtitleLabel = new Label("Kết nối và trò chuyện với bạn bè");
-        subtitleLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #6c757d;");
+        subtitleLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + mutedColor + ";");
         titleBox.getChildren().addAll(titleLabel, subtitleLabel);
 
         headerBox.getChildren().addAll(iconPane, titleBox);

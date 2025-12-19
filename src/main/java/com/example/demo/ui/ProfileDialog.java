@@ -70,11 +70,14 @@ public class ProfileDialog extends Stage {
         avatarCircle = new Circle(50);
         avatarCircle.getStyleClass().add("profile-avatar");
 
+        String textColor = SettingsDialog.isDarkTheme() ? "#e2e8f0" : "#495057";
+        String mutedColor = SettingsDialog.isDarkTheme() ? "#9ca3af" : "#6c757d";
+
         usernameLabel = new Label();
-        usernameLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: #495057;");
+        usernameLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: " + textColor + ";");
 
         displayNameLabel = new Label();
-        displayNameLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #6c757d;");
+        displayNameLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: " + mutedColor + ";");
 
         statusLabel = new Label();
         statusLabel.setStyle("-fx-font-size: 12px;");
@@ -93,13 +96,22 @@ public class ProfileDialog extends Stage {
     }
 
     private VBox createLayout() {
+        // Check dark mode state
+        boolean isDark = SettingsDialog.isDarkTheme();
+        String bgColor = isDark ? "#1e293b" : "#ffffff";
+        String cardBg = isDark ? "#374151" : "#f8f9fa";
+        String cardBorder = isDark ? "#4b5563" : "#dee2e6";
+        String infoBg = isDark ? "#1f2937" : "white";
+        String infoBorder = isDark ? "#374151" : "#e9ecef";
+
         VBox mainLayout = new VBox(20);
         mainLayout.setPadding(new Insets(20));
-        mainLayout.setStyle("-fx-background-color: #ffffff;");
+        mainLayout.setStyle("-fx-background-color: " + bgColor + ";");
 
-        // Profile card
         VBox profileCard = new VBox(20);
-        profileCard.getStyleClass().add("profile-card");
+        profileCard.setStyle(
+                "-fx-background-color: " + cardBg + "; -fx-padding: 20; -fx-border-radius: 12; -fx-border-color: "
+                        + cardBorder + "; -fx-background-radius: 12;");
         profileCard.setAlignment(Pos.CENTER);
 
         // Avatar - load from URL or use fallback color
@@ -109,9 +121,10 @@ public class ProfileDialog extends Stage {
             AvatarUtils.setAvatarOnCircleAsync(avatarCircle, profileUser.getAvatarUrl(), profileUser.getUsername(), 50);
         }
 
-        // User info
         VBox infoBox = new VBox(15);
-        infoBox.getStyleClass().add("profile-info");
+        infoBox.setStyle(
+                "-fx-background-color: " + infoBg + "; -fx-padding: 15; -fx-border-radius: 8; -fx-border-color: "
+                        + infoBorder + "; -fx-background-radius: 8;");
         infoBox.setAlignment(Pos.CENTER_LEFT);
 
         // Name section
