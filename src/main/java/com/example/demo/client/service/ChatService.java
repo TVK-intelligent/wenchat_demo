@@ -701,11 +701,9 @@ public class ChatService {
      */
     public boolean inviteUserToRoom(Long roomId, Long inviteeId) {
         try {
-            Map<String, Object> params = new HashMap<>();
-            params.put("roomId", roomId);
-            params.put("inviteeId", inviteeId);
-
-            post("/api/room-invites", objectMapper.writeValueAsString(params), true);
+            // Backend expects query parameters, not JSON body
+            String endpoint = String.format("/api/room-invites?roomId=%d&inviteeId=%d", roomId, inviteeId);
+            post(endpoint, "{}", true);
             log.info("User invited to room!");
             return true;
 
