@@ -33,6 +33,7 @@ public class RoomManagementDialog extends Stage {
     private ListView<ChatRoom> myRoomsList;
     private ListView<ChatRoom> publicRoomsList;
     private ListView<User> availableFriendsList;
+    private ListView<java.util.Map<String, Object>> pendingInvitesList;
     private TextField roomNameField;
     private TextArea roomDescriptionField;
     private CheckBox privateRoomCheckBox;
@@ -187,11 +188,15 @@ public class RoomManagementDialog extends Stage {
         Tab createRoomTab = new Tab("➕ Tạo phòng", createRoomTab());
         createRoomTab.setClosable(false);
 
-        // Invites Tab
+        // Invites Tab (send invites)
         Tab invitesTab = new Tab("📨 Mời bạn bè", createInvitesTab());
         invitesTab.setClosable(false);
 
-        tabPane.getTabs().addAll(myRoomsTab, publicRoomsTab, createRoomTab, invitesTab);
+        // Pending Invites Tab (received invites)
+        Tab pendingInvitesTab = new Tab("📥 Lời mời nhận được", createPendingInvitesTab());
+        pendingInvitesTab.setClosable(false);
+
+        tabPane.getTabs().addAll(myRoomsTab, publicRoomsTab, createRoomTab, invitesTab, pendingInvitesTab);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
         // Bottom buttons
@@ -360,6 +365,26 @@ public class RoomManagementDialog extends Stage {
         return tabContent;
     }
 
+    private VBox createPendingInvitesTab() {
+        VBox tabContent = new VBox(15);
+        tabContent.setPadding(new Insets(15));
+
+        Label label = new Label("Lời mời vào phòng đang chờ xử lý:");
+        label.setStyle("-fx-font-weight: bold; -fx-text-fill: #495057;");
+
+        pendingInvitesList = new ListView<>();
+        pendingInvitesList.setPrefHeight(300);
+        pendingInvitesList.setCellFactory(param -> new PendingInviteCell());
+        VBox.setVgrow(pendingInvitesList, Priority.ALWAYS);
+        pendingInvitesList.setStyle(
+                "-fx-background-color: #f8f9fa; -fx-background-radius: 12; " +
+                        "-fx-border-radius: 12; -fx-border-color: #e9ecef;");
+        pendingInvitesList.setPlaceholder(new Label("Không có lời mời nào"));
+
+        tabContent.getChildren().addAll(label, pendingInvitesList);
+        return tabContent;
+    }
+
     private void loadData() {
         // Load my rooms - filter out auto-created private chat rooms
         List<ChatRoom> myRooms = chatService.getMyRooms().stream()
@@ -383,6 +408,13 @@ public class RoomManagementDialog extends Stage {
         if (!myRooms.isEmpty()) {
             inviteRoomSelector.setValue(myRooms.get(0));
             loadAvailableFriends(myRooms.get(0).getId());
+        }
+
+        // Load pending room invites
+        if (pendingInvitesList != null) {
+            java.util.List<java.util.Map<String, Object>> pendingInvites = chatService.getPendingRoomInvites();
+            pendingInvitesList.getItems().clear();
+            pendingInvitesList.getItems().addAll(pendingInvites);
         }
     }
 
@@ -694,6 +726,105 @@ public class RoomManagementDialog extends Stage {
                 setGraphic(userBox);
                 setText(null);
                 setStyle("-fx-background-color: transparent; -fx-padding: 2 0;");
+            }
+        }
+    }
+
+    // Custom cell for pending room invites
+    private class PendingInviteCell extends ListCell<java.util.Map<String, Object>> {
+        @Override
+        protected void updateItem(java.util.Map<String, Object> invite, boolean empty) {
+            super.updateItem(invite, empty);
+            if (empty || invite == null) {
+                setText(null);
+                setGraphic(null);
+            } else {
+                HBox inviteBox = new HBox(12);
+                inviteBox.setAlignment(Pos.CENTER_LEFT);
+                inviteBox.setPadding(new Insets(12, 15, 12, 15));
+                inviteBox.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
+
+                // Room icon
+                StackPane iconPane = new StackPane();
+                Circle roomIcon = new Circle(22);
+                String roomNameRaw = (String) invite.get("roomName");
+                final String roomName = (roomNameRaw != null) ? roomNameRaw : "Phòng";
+                int hash = Math.abs(roomName.hashCode());
+                roomIcon.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
+                roomIcon.setEffect(new DropShadow(4, Color.web("#00000020")));
+
+                Label iconEmoji = new Label("🏠");
+                iconEmoji.setStyle("-fx-font-size: 16px;");
+                iconPane.getChildren().addAll(roomIcon, iconEmoji);
+
+                // Extract inviter info from nested object
+                String inviterName = "Ai đó";
+                @SuppressWarnings("unchecked")
+                java.util.Map<String, Object> inviter = (java.util.Map<String, Object>) invite.get("inviter");
+                if (inviter != null) {
+                    String displayName = (String) inviter.get("displayName");
+                    String username = (String) inviter.get("username");
+                    inviterName = displayName != null && !displayName.isEmpty() ? displayName : username;
+                }
+
+                // Info
+                VBox infoBox = new VBox(3);
+                Label nameLabel = new Label(roomName);
+                nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #212529;");
+
+                Label inviterLabel = new Label("👤 Mời bởi: " + inviterName);
+                inviterLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #6c757d;");
+
+                infoBox.getChildren().addAll(nameLabel, inviterLabel);
+
+                Region spacer = new Region();
+                HBox.setHgrow(spacer, Priority.ALWAYS);
+
+                // Action buttons
+                Button acceptButton = new Button("✓ Chấp nhận");
+                acceptButton.setStyle(
+                        "-fx-background-color: #4ade80; -fx-text-fill: white; " +
+                                "-fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 12; -fx-cursor: hand;");
+
+                Button declineButton = new Button("✕");
+                declineButton.setStyle(
+                        "-fx-background-color: #f87171; -fx-text-fill: white; " +
+                                "-fx-font-size: 11px; -fx-padding: 6 10; -fx-background-radius: 12; -fx-cursor: hand;");
+
+                // Get invite ID
+                Long inviteId = Long.valueOf(invite.get("id").toString());
+
+                acceptButton.setOnAction(e -> {
+                    boolean success = chatService.acceptRoomInvite(inviteId);
+                    if (success) {
+                        showInfo("Thành công", "Đã tham gia phòng: " + roomName);
+                        loadData(); // Refresh data
+                    } else {
+                        showError("Lỗi", "Không thể chấp nhận lời mời");
+                    }
+                });
+
+                declineButton.setOnAction(e -> {
+                    boolean success = chatService.declineRoomInvite(inviteId);
+                    if (success) {
+                        showInfo("Đã từ chối", "Đã từ chối lời mời vào phòng");
+                        loadData(); // Refresh data
+                    } else {
+                        showError("Lỗi", "Không thể từ chối lời mời");
+                    }
+                });
+
+                inviteBox.getChildren().addAll(iconPane, infoBox, spacer, acceptButton, declineButton);
+
+                // Hover effect
+                inviteBox.setOnMouseEntered(e -> inviteBox.setStyle(
+                        "-fx-background-color: #f8f9fa; -fx-background-radius: 10;"));
+                inviteBox.setOnMouseExited(e -> inviteBox.setStyle(
+                        "-fx-background-color: white; -fx-background-radius: 10;"));
+
+                setGraphic(inviteBox);
+                setText(null);
+                setStyle("-fx-background-color: transparent; -fx-padding: 3 0;");
             }
         }
     }

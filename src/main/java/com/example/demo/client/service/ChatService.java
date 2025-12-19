@@ -344,23 +344,45 @@ public class ChatService {
 
     /**
      * 👫 Add friend (send friend request)
+     * 
+     * @return null if success, error message string if failed
      */
-    public boolean addFriend(Long userId) {
+    public String addFriend(Long userId) {
         try {
             // Use query parameter for the friend request endpoint
             String endpoint = String.format("/api/friends/request?friendId=%d", userId);
             post(endpoint, "{}", true);
             log.info("Friend request sent!");
-            return true;
+            return null; // Success
 
         } catch (Exception e) {
             String errorMsg = e.getMessage();
+
+            // Parse backend error message from HTTP response
+            if (errorMsg.contains("already sent a friend request")) {
+                return "Bạn đã gửi lời mời kết bạn đến người dùng này rồi!";
+            }
+            if (errorMsg.contains("already friends")) {
+                return "Bạn đã là bạn bè với người dùng này!";
+            }
             if (errorMsg.contains("HTTP 409")) {
                 log.warn("Already friends or request already sent");
-                return true;
+                return null; // Treat as success
             }
+            if (errorMsg.contains("HTTP 400")) {
+                // Try to extract message from JSON response
+                if (errorMsg.contains("\"message\"")) {
+                    int start = errorMsg.indexOf("\"message\":\"") + 11;
+                    int end = errorMsg.indexOf("\"", start);
+                    if (start > 10 && end > start) {
+                        return errorMsg.substring(start, end);
+                    }
+                }
+                return "Không thể gửi lời mời kết bạn";
+            }
+
             log.error("Failed to add friend: " + errorMsg);
-            return false;
+            return "Lỗi: " + errorMsg;
         }
     }
 
@@ -416,7 +438,7 @@ public class ChatService {
      * ➕ Send friend request (delegates to addFriend for unified logic)
      */
     public boolean sendFriendRequest(Long friendId) {
-        return addFriend(friendId);
+        return addFriend(friendId) == null; // null means success
     }
 
     /**

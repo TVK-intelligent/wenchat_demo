@@ -351,12 +351,12 @@ public class FriendsManagementDialog extends Stage {
         addFriendButton.setOnAction(e -> {
             User selected = searchResultsList.getSelectionModel().getSelectedItem();
             if (selected != null) {
-                boolean success = chatService.addFriend(selected.getId());
-                if (success) {
+                String errorMessage = chatService.addFriend(selected.getId());
+                if (errorMessage == null) {
                     showInfo("Thành công", "Đã gửi lời mời kết bạn đến " + selected.getDisplayName() + "!");
                     searchResultsList.getItems().remove(selected);
                 } else {
-                    showError("Lỗi", "Không thể gửi lời mời kết bạn");
+                    showError("Lỗi", errorMessage);
                 }
             }
         });
@@ -486,11 +486,28 @@ public class FriendsManagementDialog extends Stage {
                 // Avatar
                 StackPane avatarPane = new StackPane();
                 Circle avatar = new Circle(18);
-                String senderName = (String) request.get("senderDisplayName");
-                if (senderName == null)
+
+                // Extract sender info from nested "user" object in API response
+                // API returns: { user: {displayName, username, ...}, friend: {...} }
+                String senderName = null;
+                @SuppressWarnings("unchecked")
+                Map<String, Object> senderUser = (Map<String, Object>) request.get("user");
+                if (senderUser != null) {
+                    senderName = (String) senderUser.get("displayName");
+                    if (senderName == null || senderName.isEmpty()) {
+                        senderName = (String) senderUser.get("username");
+                    }
+                }
+                // Fallback to old field names for backwards compatibility
+                if (senderName == null) {
+                    senderName = (String) request.get("senderDisplayName");
+                }
+                if (senderName == null) {
                     senderName = (String) request.get("senderUsername");
-                if (senderName == null)
+                }
+                if (senderName == null) {
                     senderName = "Unknown";
+                }
 
                 int hash = Math.abs(senderName.hashCode());
                 avatar.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
