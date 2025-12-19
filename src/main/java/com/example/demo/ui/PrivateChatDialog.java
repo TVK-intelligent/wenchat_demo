@@ -21,8 +21,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Modern Private Chat Dialog - Direct messaging between users
@@ -45,6 +48,8 @@ public class PrivateChatDialog extends Stage {
 
     // Message storage
     private List<ChatMessage> privateMessages = new ArrayList<>();
+    // Map to track message bubbles for recall updates
+    private Map<Long, VBox> messageBubbles = new HashMap<>();
 
     // Avatar colors
     private static final Color[] AVATAR_COLORS = {
@@ -338,6 +343,7 @@ public class PrivateChatDialog extends Stage {
 
     private void addMessageToView(ChatMessage message) {
         boolean isMine = message.getSenderId().equals(currentUser.getId());
+        boolean isRecalled = message.isRecalled();
 
         HBox alignmentBox = new HBox(10);
         alignmentBox.setPadding(new Insets(3, 15, 3, 15));
@@ -345,33 +351,69 @@ public class PrivateChatDialog extends Stage {
         // Avatar
         StackPane avatarPane = createAvatar(isMine ? currentUser : targetUser);
 
-        // Message bubble
+        // Message bubble - ĐỒNG NHẤT với ContentArea
         VBox bubble = new VBox(4);
         bubble.setMaxWidth(280);
         bubble.setPadding(new Insets(10, 14, 10, 14));
 
+        // Bubble style - tím nhạt cho cả 2 bên (light mode)
         if (isMine) {
             bubble.setStyle(
-                    "-fx-background-color: linear-gradient(135deg, #667eea 0%, #764ba2 100%); " +
-                            "-fx-background-radius: 18 18 4 18;");
+                    "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
+                            "-fx-background-radius: 18 18 4 18; " +
+                            "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 18 18 4 18; " +
+                            "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
         } else {
             bubble.setStyle(
-                    "-fx-background-color: white; " +
+                    "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
                             "-fx-background-radius: 18 18 18 4; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 4, 0, 0, 1);");
+                            "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 18 18 18 4; " +
+                            "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
         }
 
-        Label contentLabel = new Label(message.getContent());
+        // Content
+        String displayName = message.getSenderDisplayName() != null
+                ? message.getSenderDisplayName()
+                : message.getSenderUsername();
+        String displayContent = isRecalled ? displayName + " đã thu hồi tin nhắn" : message.getContent();
+
+        Label contentLabel = new Label(displayContent);
         contentLabel.setWrapText(true);
         contentLabel.setMaxWidth(260);
-        contentLabel.setStyle(isMine ? "-fx-text-fill: white; -fx-font-size: 14px;"
-                : "-fx-text-fill: #212529; -fx-font-size: 14px;");
+        contentLabel.setStyle("-fx-text-fill: #1e293b; -fx-font-size: 14px; -fx-font-weight: 500;" +
+                (isRecalled ? " -fx-font-style: italic;" : ""));
 
         Label timeLabel = new Label(message.getTimestamp().format(DateTimeFormatter.ofPattern("HH:mm")));
-        timeLabel.setStyle(isMine ? "-fx-text-fill: rgba(255,255,255,0.7); -fx-font-size: 10px;"
-                : "-fx-text-fill: #9ca3af; -fx-font-size: 10px;");
+        timeLabel.setStyle("-fx-text-fill: #64748b; -fx-font-size: 10px; -fx-font-weight: 600;");
 
         bubble.getChildren().addAll(contentLabel, timeLabel);
+
+        // Context menu for recall - only for own messages within 2 minutes
+        if (isMine && !isRecalled && message.getId() != null) {
+            long minutesElapsed = ChronoUnit.MINUTES.between(message.getTimestamp(), LocalDateTime.now());
+            if (minutesElapsed < 2) {
+                ContextMenu contextMenu = new ContextMenu();
+                MenuItem recallItem = new MenuItem("Thu hồi");
+                recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
+                final Long msgId = message.getId();
+                recallItem.setOnAction(e -> {
+                    boolean success = chatService.recallMessage(msgId);
+                    if (success) {
+                        // Update UI immediately
+                        updateMessageAsRecalled(msgId);
+                    } else {
+                        showError("Lỗi", "Không thể thu hồi tin nhắn.");
+                    }
+                });
+                contextMenu.getItems().add(recallItem);
+                bubble.setOnContextMenuRequested(ev -> contextMenu.show(bubble, ev.getScreenX(), ev.getScreenY()));
+            }
+        }
+
+        // Store bubble for recall updates
+        if (message.getId() != null) {
+            messageBubbles.put(message.getId(), bubble);
+        }
 
         // Arrange based on sender
         if (isMine) {
@@ -387,7 +429,9 @@ public class PrivateChatDialog extends Stage {
         alignmentBox.setTranslateY(15);
 
         messageListView.getItems().add(alignmentBox);
-        messageListView.scrollTo(messageListView.getItems().size() - 1);
+        javafx.application.Platform.runLater(() -> {
+            messageListView.scrollTo(messageListView.getItems().size() - 1);
+        });
 
         // Fade + Slide animation
         FadeTransition fade = new FadeTransition(Duration.millis(200), alignmentBox);
@@ -400,6 +444,31 @@ public class PrivateChatDialog extends Stage {
 
         fade.play();
         slide.play();
+    }
+
+    /**
+     * Update a message as recalled
+     */
+    private void updateMessageAsRecalled(Long messageId) {
+        if (messageId == null)
+            return;
+
+        javafx.application.Platform.runLater(() -> {
+            // Update in message list
+            for (ChatMessage msg : privateMessages) {
+                if (messageId.equals(msg.getId())) {
+                    msg.setRecalled(true);
+                    break;
+                }
+            }
+
+            // Refresh the view
+            messageListView.getItems().clear();
+            messageBubbles.clear();
+            for (ChatMessage msg : privateMessages) {
+                addMessageToView(msg);
+            }
+        });
     }
 
     private StackPane createAvatar(User user) {

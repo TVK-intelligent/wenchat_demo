@@ -516,16 +516,20 @@ public class ContentArea extends BorderPane {
                 ContextMenu contextMenu = new ContextMenu();
                 MenuItem recallItem = new MenuItem("Thu hồi");
                 recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
+                final Long finalMessageId = messageId;
                 recallItem.setOnAction(e -> {
                     if (chatService != null) {
-                        boolean success = chatService.recallMessage(messageId);
-                        if (!success) {
+                        boolean success = chatService.recallMessage(finalMessageId);
+                        if (success) {
+                            // Cập nhật UI ngay lập tức - không đợi WebSocket
+                            updateMessageAsRecalled(finalMessageId);
+                        } else {
                             showAlert(Alert.AlertType.ERROR, "Lỗi", "Không thể thu hồi tin nhắn.");
                         }
                     }
                 });
                 contextMenu.getItems().add(recallItem);
-                bubble.setOnContextMenuRequested(e -> contextMenu.show(bubble, e.getScreenX(), e.getScreenY()));
+                bubble.setOnContextMenuRequested(ev -> contextMenu.show(bubble, ev.getScreenX(), ev.getScreenY()));
             }
         }
 
@@ -569,7 +573,10 @@ public class ContentArea extends BorderPane {
         alignmentBox.setTranslateY(20);
 
         messageListView.getItems().add(alignmentBox);
-        messageListView.scrollTo(messageListView.getItems().size() - 1);
+        // Đảm bảo scroll sau khi item được render
+        Platform.runLater(() -> {
+            messageListView.scrollTo(messageListView.getItems().size() - 1);
+        });
 
         // Fade + Slide animation
         FadeTransition fade = new FadeTransition(Duration.millis(250), alignmentBox);
