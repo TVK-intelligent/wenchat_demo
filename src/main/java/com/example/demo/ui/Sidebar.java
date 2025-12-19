@@ -506,18 +506,89 @@ public class Sidebar extends VBox {
      * Called when receiving WebSocket user status updates
      */
     public void updateFriendStatus(Long userId, boolean isOnline) {
-        if (loadedFriends == null)
-            return;
+        System.out.println("🔄 updateFriendStatus called: userId=" + userId + ", isOnline=" + isOnline);
 
-        // Find and update the friend's status
-        for (com.example.demo.client.model.User friend : loadedFriends) {
-            if (friend.getId().equals(userId)) {
-                friend.setStatus(isOnline ? com.example.demo.client.model.User.Status.ONLINE
-                        : com.example.demo.client.model.User.Status.OFFLINE);
-                // Refresh the list to update the status indicator
-                friendsListView.refresh();
-                break;
+        // Update friend status in Direct Messages list
+        if (loadedFriends != null) {
+            for (com.example.demo.client.model.User friend : loadedFriends) {
+                if (friend.getId().equals(userId)) {
+                    friend.setStatus(isOnline ? com.example.demo.client.model.User.Status.ONLINE
+                            : com.example.demo.client.model.User.Status.OFFLINE);
+                    // Refresh the list to update the status indicator
+                    friendsListView.refresh();
+                    System.out.println("✅ Updated friend status in DM list: " + friend.getDisplayName());
+                    break;
+                }
             }
+        }
+
+        // Also update Online Users list
+        updateOnlineUsersList(userId, isOnline);
+    }
+
+    /**
+     * Update the Online Users list when a user comes online or goes offline
+     */
+    private void updateOnlineUsersList(Long userId, boolean isOnline) {
+        // Find user display name from loadedFriends or other sources
+        String userDisplayName = null;
+
+        if (loadedFriends != null) {
+            for (com.example.demo.client.model.User friend : loadedFriends) {
+                if (friend.getId().equals(userId)) {
+                    userDisplayName = friend.getDisplayName() != null ? friend.getDisplayName() : friend.getUsername();
+                    break;
+                }
+            }
+        }
+
+        if (isOnline) {
+            // User came online - add to Online Users list if not already present
+            if (userDisplayName != null) {
+                final String displayName = userDisplayName;
+                boolean alreadyInList = userListView.getItems().stream()
+                        .anyMatch(item -> item.equals(displayName));
+                if (!alreadyInList) {
+                    userListView.getItems().add(displayName);
+                    System.out.println("➕ Added to Online Users: " + displayName);
+                }
+            }
+        } else {
+            // User went offline - remove from Online Users list
+            if (userDisplayName != null) {
+                final String displayName = userDisplayName;
+                userListView.getItems().removeIf(item -> item.equals(displayName));
+                System.out.println("➖ Removed from Online Users: " + displayName);
+            }
+        }
+
+        // Update count
+        onlineCountLabel.setText(String.valueOf(userListView.getItems().size()));
+    }
+
+    /**
+     * Add a user to the Online Users list by username/displayName
+     * Called when receiving a user online notification
+     */
+    public void addOnlineUser(String displayName, String username) {
+        String nameToUse = displayName != null ? displayName : username;
+        if (nameToUse != null && !userListView.getItems().contains(nameToUse)) {
+            userListView.getItems().add(nameToUse);
+            onlineCountLabel.setText(String.valueOf(userListView.getItems().size()));
+            System.out.println("➕ Added online user: " + nameToUse);
+        }
+    }
+
+    /**
+     * Remove a user from the Online Users list by username/displayName
+     * Called when receiving a user offline notification
+     */
+    public void removeOnlineUser(String displayName, String username) {
+        String nameToRemove = displayName != null ? displayName : username;
+        if (nameToRemove != null) {
+            userListView.getItems().remove(nameToRemove);
+            onlineCountLabel.setText(String.valueOf(userListView.getItems().size()));
+            System.out.println("➖ Removed online user: " + nameToRemove);
         }
     }
 

@@ -1130,12 +1130,22 @@ public class ChatClientFXApp extends Application {
         if (statusMessage == null)
             return;
 
-        log.info("User status update: {} is now {}", statusMessage.getUsername(), statusMessage.getStatus());
+        boolean isOnline = "ONLINE".equals(statusMessage.getStatus())
+                || Boolean.TRUE.equals(statusMessage.getIsOnline());
+        log.info("👥 User status update: {} (id={}) is now {}",
+                statusMessage.getUsername(), statusMessage.getUserId(), isOnline ? "ONLINE" : "OFFLINE");
 
         Platform.runLater(() -> {
-            // Update friend status in sidebar
-            sidebar.updateFriendStatus(statusMessage.getUserId(),
-                    "ONLINE".equals(statusMessage.getStatus()) || Boolean.TRUE.equals(statusMessage.getIsOnline()));
+            // Update friend status in sidebar (this also updates Online Users list now)
+            sidebar.updateFriendStatus(statusMessage.getUserId(), isOnline);
+
+            // Also directly add/remove from Online Users list using displayName/username
+            // This handles users who are not in the friends list
+            if (isOnline) {
+                sidebar.addOnlineUser(statusMessage.getDisplayName(), statusMessage.getUsername());
+            } else {
+                sidebar.removeOnlineUser(statusMessage.getDisplayName(), statusMessage.getUsername());
+            }
         });
     }
 
