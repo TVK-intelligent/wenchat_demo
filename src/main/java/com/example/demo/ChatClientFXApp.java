@@ -46,6 +46,7 @@ import com.example.demo.client.model.User;
 import com.example.demo.client.model.ChatMessage;
 import com.example.demo.client.model.FriendRequestNotification;
 import com.example.demo.client.model.RoomInviteNotification;
+import com.example.demo.client.model.RecallResponse;
 
 /**
  * 🚀 WebChat Group 10 Desktop Client - JavaFX Application
@@ -388,22 +389,28 @@ public class ChatClientFXApp extends Application {
                 (message.getSenderId().equals(currentUserId) &&
                         message.getRecipientId() != null && message.getRecipientId().equals(expectedUser.getId()))) {
 
-            // Avoid duplicates for messages we sent
-            if (!message.getSenderId().equals(currentUserId)) {
-                javafx.application.Platform.runLater(() -> {
-                    String displayName = expectedUser.getDisplayName() != null ? expectedUser.getDisplayName()
-                            : expectedUser.getUsername();
+            // Handle local UI update for recalled message or new incoming message
+            javafx.application.Platform.runLater(() -> {
+                String displayName = expectedUser.getDisplayName() != null ? expectedUser.getDisplayName()
+                        : expectedUser.getUsername();
 
+                boolean isMine = message.getSenderId().equals(currentUserId);
+
+                if (message.isRecalled()) {
+                    contentArea.updateMessageAsRecalled(message.getId());
+                } else if (!isMine) { // Only add new messages if not mine (we add mine immediately in sendMessage)
                     // Check if this is a file message
                     if (message.getMessageType() == ChatMessage.MessageType.FILE ||
                             message.getMessageType() == ChatMessage.MessageType.IMAGE) {
-                        contentArea.addFileMessage(displayName, message.getFileName(), message.getContent(),
-                                message.getTimestamp(), false);
+                        contentArea.addFileMessage(message.getId(), displayName, message.getFileName(),
+                                message.getContent(),
+                                message.getTimestamp(), false, false);
                     } else {
-                        contentArea.addMessage(displayName, message.getContent(), message.getTimestamp(), false);
+                        contentArea.addMessage(message.getId(), displayName, message.getContent(),
+                                message.getTimestamp(), false, false);
                     }
-                });
-            }
+                }
+            });
         }
     }
 
@@ -516,6 +523,7 @@ public class ChatClientFXApp extends Application {
 
             // Initialize chat service and websocket client
             chatService = new ChatService(serverUrl);
+            contentArea.setChatService(chatService);
             webSocketClient = new WebSocketClient(serverUrl);
 
             // Configure AvatarUtils with server base URL
@@ -606,6 +614,7 @@ public class ChatClientFXApp extends Application {
                     webSocketClient.subscribeToRoomInvites(this::handleRoomInviteNotification);
                     webSocketClient.subscribeToPrivateMessages(this::handlePrivateMessageNotification);
                     webSocketClient.subscribeToUserStatus(this::handleUserStatusUpdate);
+                    webSocketClient.subscribeToMessageRecall(this::handleMessageRecall);
 
                     // Update UI status
                     contentArea.setOnlineStatus(true);
@@ -904,7 +913,8 @@ public class ChatClientFXApp extends Application {
                         webSocketClient.sendPrivateMessage(privateChatUser.getId(), message);
 
                         // Add to local display immediately
-                        contentArea.addMessage(currentUsername, message, java.time.LocalDateTime.now(), true);
+                        contentArea.addMessage(null, currentUsername, message, java.time.LocalDateTime.now(), true,
+                                false);
                         contentArea.getInputField().clear();
                     } else {
                         // Send to current room
@@ -1011,43 +1021,58 @@ public class ChatClientFXApp extends Application {
     }
 
     private void handleIncomingMessage(com.example.demo.client.model.ChatMessage message) {
-        if (message != null && message.getContent() != null && message.getRoomId() != null) {
-            // Check if message already exists (prevent duplicates)
+        if (message != null && message.getRoomId() != null) {
+            // Check if message already exists (prevent duplicates/handle updates)
             List<ChatMessage> messages = roomMessages.computeIfAbsent(message.getRoomId(), k -> new ArrayList<>());
-            boolean alreadyExists = messages.stream()
-                    .anyMatch(m -> m.getId() != null && m.getId().equals(message.getId()));
 
-            if (!alreadyExists) {
-                // Store message in room messages
-                messages.add(message);
+            ChatMessage existing = messages.stream()
+                    .filter(m -> m.getId() != null && m.getId().equals(message.getId()))
+                    .findFirst()
+                    .orElse(null);
 
-                // Only display if it's the current room
-                if (message.getRoomId().equals(currentRoomId)) {
-                    Platform.runLater(() -> {
-                        String displayName = message.getSenderDisplayName() != null ? message.getSenderDisplayName()
-                                : message.getSenderUsername();
-
-                        boolean isMine = message.getSenderUsername() != null
-                                && message.getSenderUsername().equals(currentUsername);
-
-                        if (message.getMessageType() == ChatMessage.MessageType.FILE) {
-                            contentArea.addFileMessage(displayName, message.getFileName(), message.getContent(),
-                                    message.getTimestamp(), isMine);
-                        } else {
-                            contentArea.addMessage(displayName, message.getContent(), message.getTimestamp(), isMine);
-                        }
-                    });
+            if (existing != null) {
+                // Update existing message (e.g., recalled status)
+                existing.setRecalled(message.isRecalled());
+                if (message.isRecalled() && message.getRoomId().equals(currentRoomId)) {
+                    contentArea.updateMessageAsRecalled(message.getId());
                 }
+                return;
+            }
 
-                // Show notification for messages from others (not from current room or window
-                // not focused)
-                if (message.getSenderId() != null && !message.getSenderId().equals(currentUserId)) {
-                    if (!message.getRoomId().equals(currentRoomId) || !notificationService.isWindowFocused()) {
-                        String displayName = message.getSenderDisplayName() != null
-                                ? message.getSenderDisplayName()
-                                : message.getSenderUsername();
-                        notificationService.showMessageNotification(displayName, message.getContent());
+            // Store new message in room messages
+            messages.add(message);
+
+            // Only display if it's the current room
+            if (message.getRoomId().equals(currentRoomId)) {
+                Platform.runLater(() -> {
+                    String displayName = message.getSenderDisplayName() != null ? message.getSenderDisplayName()
+                            : message.getSenderUsername();
+
+                    boolean isMine = message.getSenderUsername() != null
+                            && message.getSenderUsername().equals(currentUsername);
+
+                    if (message.isRecalled()) {
+                        contentArea.addMessage(message.getId(), displayName, null, message.getTimestamp(), isMine,
+                                true);
+                    } else if (message.getMessageType() == ChatMessage.MessageType.FILE) {
+                        contentArea.addFileMessage(message.getId(), displayName, message.getFileName(),
+                                message.getContent(),
+                                message.getTimestamp(), isMine, false);
+                    } else {
+                        contentArea.addMessage(message.getId(), displayName, message.getContent(),
+                                message.getTimestamp(), isMine, false);
                     }
+                });
+            }
+
+            // Show notification for messages from others (not from current room or window
+            // not focused)
+            if (message.getSenderId() != null && !message.getSenderId().equals(currentUserId)) {
+                if (!message.getRoomId().equals(currentRoomId) || !notificationService.isWindowFocused()) {
+                    String displayName = message.getSenderDisplayName() != null
+                            ? message.getSenderDisplayName()
+                            : message.getSenderUsername();
+                    notificationService.showMessageNotification(displayName, message.getContent());
                 }
             }
         }
@@ -1145,6 +1170,34 @@ public class ChatClientFXApp extends Application {
                 sidebar.addOnlineUser(statusMessage.getDisplayName(), statusMessage.getUsername());
             } else {
                 sidebar.removeOnlineUser(statusMessage.getDisplayName(), statusMessage.getUsername());
+            }
+        });
+    }
+
+    /**
+     * 🔙 Handle message recall notification from WebSocket
+     */
+    private void handleMessageRecall(RecallResponse recallResponse) {
+        if (recallResponse == null || recallResponse.getMessageId() == null)
+            return;
+
+        log.info("🔙 Received recall for message: {}", recallResponse.getMessageId());
+
+        Platform.runLater(() -> {
+            // Update UI to show recalled message
+            contentArea.updateMessageAsRecalled(recallResponse.getMessageId());
+
+            // Also update in local message storage if present
+            if (recallResponse.getRoomId() != null) {
+                List<ChatMessage> messages = roomMessages.get(recallResponse.getRoomId());
+                if (messages != null) {
+                    for (ChatMessage msg : messages) {
+                        if (msg.getId() != null && msg.getId().equals(recallResponse.getMessageId())) {
+                            msg.setRecalled(true);
+                            break;
+                        }
+                    }
+                }
             }
         });
     }

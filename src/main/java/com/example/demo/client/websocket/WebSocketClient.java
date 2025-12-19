@@ -4,6 +4,7 @@ import com.example.demo.client.config.ServerConfig;
 import com.example.demo.client.model.ChatMessage;
 import com.example.demo.client.model.FriendRequestNotification;
 import com.example.demo.client.model.RoomInviteNotification;
+import com.example.demo.client.model.RecallResponse;
 import com.example.demo.client.model.TypingIndicator;
 import com.example.demo.client.model.UserStatusMessage;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -488,6 +489,46 @@ public class WebSocketClient {
             log.info("Subscribed to room invites");
         } catch (Exception e) {
             log.error("Failed to subscribe to room invites: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🔙 Subscribe to message recall notifications
+     */
+    public void subscribeToMessageRecall(Consumer<RecallResponse> callback) {
+        if (stompSession == null || !connected)
+            return;
+
+        String destination = "/user/queue/recall";
+        String subscriptionName = "message-recall";
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to {}", subscriptionName);
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    RecallResponse recallResponse = parsePayload(payload, RecallResponse.class);
+                    if (recallResponse != null) {
+                        log.info("🔙 Received recall notification for message: {}", recallResponse.getMessageId());
+                        callback.accept(recallResponse);
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("✅ Subscribed to message recall notifications");
+        } catch (Exception e) {
+            log.error("Failed to subscribe to message recall: " + e.getMessage());
         }
     }
 

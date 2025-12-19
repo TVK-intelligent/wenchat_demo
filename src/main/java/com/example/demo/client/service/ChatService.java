@@ -816,6 +816,23 @@ public class ChatService {
     }
 
     /**
+     * 🔙 Recall (unsend) a message
+     * 
+     * @param messageId ID of the message to recall
+     * @return true if successful, false otherwise
+     */
+    public boolean recallMessage(Long messageId) {
+        try {
+            put("/api/messages/" + messageId + "/recall", "{}", true);
+            log.info("Message recalled: " + messageId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to recall message: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * 🌐 Generic PUT request
      */
     private String put(String endpoint, String body, boolean authenticated) throws Exception {

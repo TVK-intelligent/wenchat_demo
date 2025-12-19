@@ -26,6 +26,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.ArrayList;
@@ -75,6 +76,7 @@ public class ContentArea extends BorderPane {
 
     // Store message data for theme switching
     private static class MessageData {
+        Long messageId;
         String user;
         String message;
         LocalDateTime timestamp;
@@ -82,23 +84,36 @@ public class ContentArea extends BorderPane {
         boolean isFile;
         String fileName;
         String fileUrl;
+        boolean recalled;
 
-        MessageData(String user, String message, LocalDateTime timestamp, boolean isMine) {
+        MessageData(Long messageId, String user, String message, LocalDateTime timestamp, boolean isMine,
+                boolean recalled) {
+            this.messageId = messageId;
             this.user = user;
             this.message = message;
             this.timestamp = timestamp;
             this.isMine = isMine;
             this.isFile = false;
+            this.recalled = recalled;
         }
 
-        MessageData(String user, String fileName, String fileUrl, LocalDateTime timestamp, boolean isMine) {
+        MessageData(Long messageId, String user, String fileName, String fileUrl, LocalDateTime timestamp,
+                boolean isMine, boolean recalled) {
+            this.messageId = messageId;
             this.user = user;
             this.fileName = fileName;
             this.fileUrl = fileUrl;
             this.timestamp = timestamp;
             this.isMine = isMine;
             this.isFile = true;
+            this.recalled = recalled;
         }
+    }
+
+    private com.example.demo.client.service.ChatService chatService;
+
+    public void setChatService(com.example.demo.client.service.ChatService chatService) {
+        this.chatService = chatService;
     }
 
     private List<MessageData> messageHistory = new ArrayList<>();
@@ -393,13 +408,14 @@ public class ContentArea extends BorderPane {
      * Add message with avatar and animation
      */
     public void addMessage(String user, String message) {
-        addMessage(user, message, LocalDateTime.now(), false);
+        addMessage(null, user, message, LocalDateTime.now(), false, false);
     }
 
-    public void addMessage(String user, String message, LocalDateTime timestamp, boolean isMine) {
+    public void addMessage(Long messageId, String user, String message, LocalDateTime timestamp, boolean isMine,
+            boolean recalled) {
         // Store message data for theme switching (only if not refreshing)
         if (!isRefreshingMessages) {
-            messageHistory.add(new MessageData(user, message, timestamp, isMine));
+            messageHistory.add(new MessageData(messageId, user, message, timestamp, isMine, recalled));
         }
 
         // Check if dark mode is enabled
@@ -432,53 +448,105 @@ public class ContentArea extends BorderPane {
         bubble.setPadding(new Insets(16, 18, 16, 18));
         bubble.setMaxWidth(450);
 
-        // Style cho bubble với gradient và shadow - cải thiện độ tương phản
+        // Style cho bubble - ĐỒNG NHẤT cả 2 bên A và B
         if (isMine) {
             if (isDarkMode) {
+                // Dark mode: bubble tím đậm
                 bubble.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); " +
                                 "-fx-background-radius: 18 18 4 18; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(59,130,246,0.5), 12, 0, 0, 4);");
+                                "-fx-border-color: #818cf8; -fx-border-width: 1.5; -fx-border-radius: 18 18 4 18; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.5), 12, 0, 0, 4);");
             } else {
+                // Light mode: bubble tím nhạt giống bên B (dễ đọc)
                 bubble.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
                                 "-fx-background-radius: 18 18 4 18; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(30,64,175,0.4), 10, 0, 0, 4);");
+                                "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 18 18 4 18; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
             }
         } else {
             if (isDarkMode) {
+                // Dark mode: bubble xám đậm
                 bubble.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #e5e7eb 0%, #f9fafb 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #374151 0%, #4b5563 100%); " +
                                 "-fx-background-radius: 18 18 18 4; " +
-                                "-fx-border-color: #d1d5db; -fx-border-width: 1.5; -fx-border-radius: 18 18 18 4; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 8, 0, 0, 3);");
+                                "-fx-border-color: #6b7280; -fx-border-width: 1.5; -fx-border-radius: 18 18 18 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 10, 0, 0, 4);");
             } else {
+                // Light mode: bubble tím nhạt
                 bubble.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
                                 "-fx-background-radius: 18 18 18 4; " +
-                                "-fx-border-color: #e2e8f0; -fx-border-width: 1.5; -fx-border-radius: 18 18 18 4; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.12), 8, 0, 0, 3);");
+                                "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 18 18 18 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
             }
         }
 
-        Label messageLabel = new Label(message);
+        String displayContent = recalled ? user + " đã thu hồi tin nhắn" : message;
+        Label messageLabel = new Label(displayContent);
         messageLabel.setWrapText(true);
         messageLabel.setMaxWidth(400);
-        messageLabel.setStyle(
-                "-fx-font-size: 16px; " +
-                        "-fx-font-family: 'Segoe UI', 'Helvetica Neue', 'Arial', sans-serif; " +
-                        "-fx-line-spacing: 1.4; " +
-                        "-fx-font-weight: 400; " +
-                        (isDarkMode ? "-fx-text-fill: white;" : "-fx-text-fill: #1a202c;") + " " +
-                        "-fx-padding: 2 0 2 0;");
+        // Text color - CHỮ ĐEN cho cả 2 bên trong Light mode
+        if (isDarkMode) {
+            // Dark mode: chữ trắng
+            messageLabel.setStyle(
+                    "-fx-font-size: 15px; " +
+                            "-fx-font-family: 'Segoe UI', 'Helvetica Neue', 'Arial', sans-serif; " +
+                            "-fx-font-weight: 500; " +
+                            (recalled ? "-fx-font-style: italic; " : "") +
+                            "-fx-text-fill: #ffffff; " +
+                            "-fx-padding: 2 0 2 0;");
+        } else {
+            // Light mode: chữ đen đậm cho cả 2 bên
+            messageLabel.setStyle(
+                    "-fx-font-size: 15px; " +
+                            "-fx-font-family: 'Segoe UI', 'Helvetica Neue', 'Arial', sans-serif; " +
+                            "-fx-font-weight: 500; " +
+                            (recalled ? "-fx-font-style: italic; " : "") +
+                            "-fx-text-fill: #1e293b; " +
+                            (recalled ? "-fx-text-fill: #64748b; " : "") +
+                            "-fx-padding: 2 0 2 0;");
+        }
 
+        // Context Menu for recall
+        if (isMine && !recalled && messageId != null) {
+            long minutesElapsed = ChronoUnit.MINUTES.between(timestamp, LocalDateTime.now());
+            if (minutesElapsed < 2) {
+                ContextMenu contextMenu = new ContextMenu();
+                MenuItem recallItem = new MenuItem("Thu hồi");
+                recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
+                recallItem.setOnAction(e -> {
+                    if (chatService != null) {
+                        boolean success = chatService.recallMessage(messageId);
+                        if (!success) {
+                            showAlert(Alert.AlertType.ERROR, "Lỗi", "Không thể thu hồi tin nhắn.");
+                        }
+                    }
+                });
+                contextMenu.getItems().add(recallItem);
+                bubble.setOnContextMenuRequested(e -> contextMenu.show(bubble, e.getScreenX(), e.getScreenY()));
+            }
+        }
+
+        // Thời gian - màu xám đậm cho light mode, trắng mờ cho dark mode
         Label timeLabel = new Label(timestamp.format(DateTimeFormatter.ofPattern("HH:mm")));
-        timeLabel.setStyle(
-                "-fx-font-size: 12px; " +
-                        "-fx-font-weight: 500; " +
-                        "-fx-font-family: 'Segoe UI', sans-serif; " +
-                        (isDarkMode ? "-fx-text-fill: rgba(255,255,255,0.8);" : "-fx-text-fill: #718096;") + " " +
-                        "-fx-padding: 4 0 0 0;");
+        if (isDarkMode) {
+            timeLabel.setStyle(
+                    "-fx-font-size: 11px; " +
+                            "-fx-font-weight: 600; " +
+                            "-fx-font-family: 'Segoe UI', sans-serif; " +
+                            "-fx-text-fill: rgba(255,255,255,0.85); " +
+                            "-fx-padding: 4 0 0 0;");
+        } else {
+            // Light mode: thời gian màu xám đậm
+            timeLabel.setStyle(
+                    "-fx-font-size: 11px; " +
+                            "-fx-font-weight: 600; " +
+                            "-fx-font-family: 'Segoe UI', sans-serif; " +
+                            "-fx-text-fill: #64748b; " +
+                            "-fx-padding: 4 0 0 0;");
+        }
 
         HBox timeBox = new HBox(timeLabel);
         timeBox.setAlignment(isMine ? Pos.BOTTOM_RIGHT : Pos.BOTTOM_LEFT);
@@ -553,7 +621,11 @@ public class ContentArea extends BorderPane {
 
     // Kept for backward compatibility
     public void addMessage(String user, String message, LocalDateTime timestamp) {
-        addMessage(user, message, timestamp, false);
+        addMessage(null, user, message, timestamp, false, false);
+    }
+
+    public void addMessage(String user, String message, LocalDateTime timestamp, boolean isMine) {
+        addMessage(null, user, message, timestamp, isMine, false);
     }
 
     public void clearMessages() {
@@ -569,12 +641,14 @@ public class ContentArea extends BorderPane {
 
             boolean isMine = msg.getSenderUsername() != null && msg.getSenderUsername().equals(currentUsername);
 
-            // Only treat as file message if messageType is FILE AND fileName is not null
-            if (msg.getMessageType() == com.example.demo.client.model.ChatMessage.MessageType.FILE
+            if (msg.isRecalled()) {
+                addMessage(msg.getId(), displayName, null, msg.getTimestamp(), isMine, true);
+            } else if (msg.getMessageType() == com.example.demo.client.model.ChatMessage.MessageType.FILE
                     && msg.getFileName() != null && !msg.getFileName().isEmpty()) {
-                addFileMessage(displayName, msg.getFileName(), msg.getContent(), msg.getTimestamp(), isMine);
+                addFileMessage(msg.getId(), displayName, msg.getFileName(), msg.getContent(), msg.getTimestamp(),
+                        isMine, false);
             } else {
-                addMessage(displayName, msg.getContent(), msg.getTimestamp(), isMine);
+                addMessage(msg.getId(), displayName, msg.getContent(), msg.getTimestamp(), isMine, false);
             }
         }
     }
@@ -596,10 +670,16 @@ public class ContentArea extends BorderPane {
         }
     }
 
-    public void addFileMessage(String user, String fileName, String fileUrl, LocalDateTime timestamp, boolean isMine) {
+    public void addFileMessage(Long messageId, String user, String fileName, String fileUrl, LocalDateTime timestamp,
+            boolean isMine, boolean recalled) {
+        if (recalled) {
+            addMessage(messageId, user, null, timestamp, isMine, true);
+            return;
+        }
+
         // Store message data for theme switching (only if not refreshing)
         if (!isRefreshingMessages) {
-            messageHistory.add(new MessageData(user, fileName, fileUrl, timestamp, isMine));
+            messageHistory.add(new MessageData(messageId, user, fileName, fileUrl, timestamp, isMine, false));
         }
 
         // Check if dark mode is enabled
@@ -634,14 +714,17 @@ public class ContentArea extends BorderPane {
         if (isMine) {
             if (isDarkMode) {
                 fileCard.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); " +
                                 "-fx-background-radius: 16 16 4 16; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(37,99,235,0.6), 12, 0, 0, 5);");
+                                "-fx-border-color: #818cf8; -fx-border-width: 1.5; -fx-border-radius: 16 16 4 16; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.5), 12, 0, 0, 4);");
             } else {
+                // Light mode: bubble tím nhạt giống tin nhắn thường
                 fileCard.setStyle(
-                        "-fx-background-color: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); " +
+                        "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
                                 "-fx-background-radius: 16 16 4 16; " +
-                                "-fx-effect: dropshadow(gaussian, rgba(79,70,229,0.5), 10, 0, 0, 4);");
+                                "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 16 16 4 16; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
             }
         } else {
             if (isDarkMode) {
@@ -651,23 +734,28 @@ public class ContentArea extends BorderPane {
                                 "-fx-border-color: #6b7280; -fx-border-width: 2; -fx-border-radius: 16 16 16 4; " +
                                 "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.7), 14, 0, 0, 5);");
             } else {
+                // Light mode: bubble tím nhạt
                 fileCard.setStyle(
                         "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
                                 "-fx-background-radius: 16 16 16 4; " +
-                                "-fx-border-color: #818cf8; -fx-border-width: 2; -fx-border-radius: 16 16 16 4; " +
+                                "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 16 16 16 4; " +
                                 "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
             }
         }
 
-        // File icon with gradient background
+        // File icon with gradient background - MÀU ĐẬM CHO CẢ 2 BÊN
         StackPane fileIconPane = new StackPane();
         Circle iconBg = new Circle(24);
-        if (isMine) {
-            iconBg.setFill(Color.web("rgba(255,255,255,0.25)"));
-        } else {
+        if (isDarkMode) {
+            // Dark mode: icon tím đậm
             iconBg.setFill(new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
-                    new Stop(0, Color.web("#667eea")),
-                    new Stop(1, Color.web("#764ba2"))));
+                    new Stop(0, Color.web("#6366f1")),
+                    new Stop(1, Color.web("#4f46e5"))));
+        } else {
+            // Light mode: icon tím đậm cho cả 2 bên
+            iconBg.setFill(new LinearGradient(0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
+                    new Stop(0, Color.web("#6366f1")),
+                    new Stop(1, Color.web("#4f46e5"))));
         }
         iconBg.setEffect(new DropShadow(4, Color.web("#00000020")));
 
@@ -686,59 +774,62 @@ public class ContentArea extends BorderPane {
         fileInfo.setMaxWidth(160);
 
         Label fileLabel = new Label(safeFileName);
+        // Chữ đen cho light mode, trắng cho dark mode
         fileLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold; " +
-                (isMine ? "-fx-text-fill: white;"
-                        : (isDarkMode ? "-fx-text-fill: #f1f5f9;" : "-fx-text-fill: #212529;")));
+                (isDarkMode ? "-fx-text-fill: #ffffff;" : "-fx-text-fill: #1e293b;"));
         fileLabel.setWrapText(true);
         fileLabel.setMaxWidth(160);
 
         Label sizeLabel = new Label("📦 Tệp đính kèm");
         sizeLabel.setStyle("-fx-font-size: 11px; " +
-                (isMine ? "-fx-text-fill: rgba(255,255,255,0.75);"
-                        : (isDarkMode ? "-fx-text-fill: #cbd5e1;" : "-fx-text-fill: #6c757d;")));
+                (isDarkMode ? "-fx-text-fill: rgba(255,255,255,0.8);" : "-fx-text-fill: #64748b;"));
 
         fileInfo.getChildren().addAll(fileLabel, sizeLabel);
         HBox.setHgrow(fileInfo, Priority.ALWAYS);
 
-        // Download button - prominent like Zalo
+        // Download button - XANH LÁ ĐẬM cho cả 2 bên
         Button downloadBtn = new Button("⬇");
         downloadBtn.setMinSize(42, 42);
         downloadBtn.setMaxSize(42, 42);
-        if (isMine) {
-            downloadBtn.setStyle(
-                    "-fx-background-color: rgba(255,255,255,0.3); " +
-                            "-fx-text-fill: white; -fx-font-size: 16px; " +
-                            "-fx-background-radius: 50; -fx-cursor: hand;");
-            downloadBtn.setOnMouseEntered(e -> downloadBtn.setStyle(
-                    "-fx-background-color: rgba(255,255,255,0.5); " +
-                            "-fx-text-fill: white; -fx-font-size: 16px; " +
-                            "-fx-background-radius: 50; -fx-cursor: hand; " +
-                            "-fx-scale-x: 1.1; -fx-scale-y: 1.1;"));
-            downloadBtn.setOnMouseExited(e -> downloadBtn.setStyle(
-                    "-fx-background-color: rgba(255,255,255,0.3); " +
-                            "-fx-text-fill: white; -fx-font-size: 16px; " +
-                            "-fx-background-radius: 50; -fx-cursor: hand;"));
-        } else {
-            downloadBtn.setStyle(
-                    "-fx-background-color: linear-gradient(to bottom, #4ade80, #22c55e); " +
-                            "-fx-text-fill: white; -fx-font-size: 16px; " +
-                            "-fx-background-radius: 50; -fx-cursor: hand; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(34,197,94,0.4), 5, 0, 0, 2);");
-            downloadBtn.setOnMouseEntered(e -> downloadBtn.setStyle(
-                    "-fx-background-color: linear-gradient(to bottom, #22c55e, #16a34a); " +
-                            "-fx-text-fill: white; -fx-font-size: 16px; " +
-                            "-fx-background-radius: 50; -fx-cursor: hand; " +
-                            "-fx-scale-x: 1.1; -fx-scale-y: 1.1; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(34,197,94,0.6), 8, 0, 0, 3);"));
-            downloadBtn.setOnMouseExited(e -> downloadBtn.setStyle(
-                    "-fx-background-color: linear-gradient(to bottom, #4ade80, #22c55e); " +
-                            "-fx-text-fill: white; -fx-font-size: 16px; " +
-                            "-fx-background-radius: 50; -fx-cursor: hand; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(34,197,94,0.4), 5, 0, 0, 2);"));
-        }
+        downloadBtn.setStyle(
+                "-fx-background-color: linear-gradient(to bottom, #22c55e, #16a34a); " +
+                        "-fx-text-fill: white; -fx-font-size: 16px; " +
+                        "-fx-background-radius: 50; -fx-cursor: hand; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(34,197,94,0.5), 6, 0, 0, 3);");
+        downloadBtn.setOnMouseEntered(e -> downloadBtn.setStyle(
+                "-fx-background-color: linear-gradient(to bottom, #16a34a, #15803d); " +
+                        "-fx-text-fill: white; -fx-font-size: 16px; " +
+                        "-fx-background-radius: 50; -fx-cursor: hand; " +
+                        "-fx-scale-x: 1.1; -fx-scale-y: 1.1; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(34,197,94,0.7), 10, 0, 0, 4);"));
+        downloadBtn.setOnMouseExited(e -> downloadBtn.setStyle(
+                "-fx-background-color: linear-gradient(to bottom, #22c55e, #16a34a); " +
+                        "-fx-text-fill: white; -fx-font-size: 16px; " +
+                        "-fx-background-radius: 50; -fx-cursor: hand; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(34,197,94,0.5), 6, 0, 0, 3);"));
 
         // Download action - direct download to local file
         downloadBtn.setOnAction(e -> downloadFile(fileName, fileUrl, downloadBtn, sizeLabel));
+
+        // Context Menu for recall (Files)
+        if (isMine && messageId != null) {
+            long minutesElapsed = ChronoUnit.MINUTES.between(timestamp, LocalDateTime.now());
+            if (minutesElapsed < 2) {
+                ContextMenu contextMenu = new ContextMenu();
+                MenuItem recallItem = new MenuItem("Thu hồi");
+                recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
+                recallItem.setOnAction(e -> {
+                    if (chatService != null) {
+                        boolean success = chatService.recallMessage(messageId);
+                        if (!success) {
+                            showAlert(Alert.AlertType.ERROR, "Lỗi", "Không thể thu hồi tệp tin.");
+                        }
+                    }
+                });
+                contextMenu.getItems().add(recallItem);
+                fileCard.setOnContextMenuRequested(e -> contextMenu.show(fileCard, e.getScreenX(), e.getScreenY()));
+            }
+        }
 
         fileCard.getChildren().addAll(fileIconPane, fileInfo, downloadBtn);
 
@@ -966,7 +1057,11 @@ public class ContentArea extends BorderPane {
 
     // Legacy support
     public void addFileMessage(String user, String fileName, String fileUrl, LocalDateTime timestamp) {
-        addFileMessage(user, fileName, fileUrl, timestamp, false);
+        addFileMessage(null, user, fileName, fileUrl, timestamp, false, false);
+    }
+
+    public void addFileMessage(String user, String fileName, String fileUrl, LocalDateTime timestamp, boolean isMine) {
+        addFileMessage(null, user, fileName, fileUrl, timestamp, isMine, false);
     }
 
     /**
@@ -1142,9 +1237,34 @@ public class ContentArea extends BorderPane {
     }
 
     /**
+     * Update a message in the UI to recalled state
+     */
+    public void updateMessageAsRecalled(Long messageId) {
+        if (messageId == null)
+            return;
+
+        Platform.runLater(() -> {
+            boolean updated = false;
+            for (MessageData data : messageHistory) {
+                if (messageId.equals(data.messageId)) {
+                    data.recalled = true;
+                    updated = true;
+                }
+            }
+
+            if (updated) {
+                // Refresh the whole list because we need to rebuild the bubbles
+                refreshAllMessages();
+            }
+        });
+    }
+
+    /**
      * Refresh all messages with current theme
      */
     private void refreshAllMessages() {
+        if (isRefreshingMessages)
+            return;
         isRefreshingMessages = true;
 
         // Clear current messages
@@ -1153,9 +1273,10 @@ public class ContentArea extends BorderPane {
         // Re-add all messages with current theme
         for (MessageData data : messageHistory) {
             if (data.isFile) {
-                addFileMessage(data.user, data.fileName, data.fileUrl, data.timestamp, data.isMine);
+                addFileMessage(data.messageId, data.user, data.fileName, data.fileUrl, data.timestamp, data.isMine,
+                        data.recalled);
             } else {
-                addMessage(data.user, data.message, data.timestamp, data.isMine);
+                addMessage(data.messageId, data.user, data.message, data.timestamp, data.isMine, data.recalled);
             }
         }
 
