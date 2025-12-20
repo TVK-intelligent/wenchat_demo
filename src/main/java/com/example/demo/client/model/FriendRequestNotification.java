@@ -18,6 +18,18 @@ import java.time.LocalDateTime;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class FriendRequestNotification {
     private Long id;
+    private Long friendRequestId;
+
+    // Backend sends these fields
+    private Long fromUserId;
+    private String fromUserUsername;
+    private String fromUserDisplayName;
+    private String fromUserAvatar;
+    private Long toUserId;
+    private String status;
+    private String eventType;
+
+    // Legacy fields for backward compatibility
     private Long senderId;
     private String senderUsername;
     private String senderDisplayName;
@@ -25,8 +37,21 @@ public class FriendRequestNotification {
     private LocalDateTime timestamp;
 
     public String getDisplayName() {
-        return senderDisplayName != null && !senderDisplayName.isEmpty()
-                ? senderDisplayName
-                : senderUsername;
+        // Prefer fromUserDisplayName from backend
+        if (fromUserDisplayName != null && !fromUserDisplayName.isEmpty()) {
+            return fromUserDisplayName;
+        }
+        if (senderDisplayName != null && !senderDisplayName.isEmpty()) {
+            return senderDisplayName;
+        }
+        // Fallback to username
+        if (fromUserUsername != null && !fromUserUsername.isEmpty()) {
+            return fromUserUsername;
+        }
+        return senderUsername;
+    }
+
+    public String getSenderUsername() {
+        return fromUserUsername != null ? fromUserUsername : senderUsername;
     }
 }
