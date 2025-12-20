@@ -512,8 +512,11 @@ public class ContentArea extends BorderPane {
         }
 
         // Context Menu for recall
+        System.out.println(
+                "📩 ContentArea.addMessage: messageId=" + messageId + ", isMine=" + isMine + ", recalled=" + recalled);
         if (isMine && !recalled && messageId != null) {
             long minutesElapsed = ChronoUnit.MINUTES.between(timestamp, LocalDateTime.now());
+            System.out.println("⏱️ Message " + messageId + " - minutes elapsed: " + minutesElapsed);
             if (minutesElapsed < 2) {
                 ContextMenu contextMenu = new ContextMenu();
                 MenuItem recallItem = new MenuItem("Thu hồi");
@@ -532,7 +535,12 @@ public class ContentArea extends BorderPane {
                 });
                 contextMenu.getItems().add(recallItem);
                 bubble.setOnContextMenuRequested(ev -> contextMenu.show(bubble, ev.getScreenX(), ev.getScreenY()));
+                System.out.println("✅ Added recall context menu for message " + messageId);
+            } else {
+                System.out.println("⚠️ Message " + messageId + " is older than 2 minutes");
             }
+        } else if (isMine && !recalled && messageId == null) {
+            System.out.println("⚠️ Message has NULL ID - cannot add recall menu!");
         }
 
         // Thời gian - màu xám đậm cho light mode, trắng mờ cho dark mode

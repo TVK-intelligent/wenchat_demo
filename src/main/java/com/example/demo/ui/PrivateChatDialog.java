@@ -393,24 +393,34 @@ public class PrivateChatDialog extends Stage {
         bubble.getChildren().addAll(contentLabel, timeLabel);
 
         // Context menu for recall - only for own messages within 2 minutes
-        if (isMine && !isRecalled && message.getId() != null) {
-            long minutesElapsed = ChronoUnit.MINUTES.between(message.getTimestamp(), LocalDateTime.now());
-            if (minutesElapsed < 2) {
-                ContextMenu contextMenu = new ContextMenu();
-                MenuItem recallItem = new MenuItem("Thu hồi");
-                recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
-                final Long msgId = message.getId();
-                recallItem.setOnAction(e -> {
-                    boolean success = chatService.recallMessage(msgId);
-                    if (success) {
-                        // Update UI immediately
-                        updateMessageAsRecalled(msgId);
-                    } else {
-                        showError("Lỗi", "Không thể thu hồi tin nhắn.");
-                    }
-                });
-                contextMenu.getItems().add(recallItem);
-                bubble.setOnContextMenuRequested(ev -> contextMenu.show(bubble, ev.getScreenX(), ev.getScreenY()));
+        log.debug("🔍 Message recall check: isMine={}, isRecalled={}, messageId={}",
+                isMine, isRecalled, message.getId());
+        if (isMine && !isRecalled) {
+            if (message.getId() != null) {
+                long minutesElapsed = ChronoUnit.MINUTES.between(message.getTimestamp(), LocalDateTime.now());
+                log.debug("⏱️ Message {} - minutes elapsed: {}", message.getId(), minutesElapsed);
+                if (minutesElapsed < 2) {
+                    ContextMenu contextMenu = new ContextMenu();
+                    MenuItem recallItem = new MenuItem("Thu hồi");
+                    recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
+                    final Long msgId = message.getId();
+                    recallItem.setOnAction(e -> {
+                        boolean success = chatService.recallMessage(msgId);
+                        if (success) {
+                            // Update UI immediately
+                            updateMessageAsRecalled(msgId);
+                        } else {
+                            showError("Lỗi", "Không thể thu hồi tin nhắn.");
+                        }
+                    });
+                    contextMenu.getItems().add(recallItem);
+                    bubble.setOnContextMenuRequested(ev -> contextMenu.show(bubble, ev.getScreenX(), ev.getScreenY()));
+                    log.info("✅ Added recall context menu for message {}", msgId);
+                } else {
+                    log.debug("⏱️ Message {} is older than 2 minutes, no recall menu", message.getId());
+                }
+            } else {
+                log.warn("⚠️ Message has null ID, cannot add recall menu");
             }
         }
 

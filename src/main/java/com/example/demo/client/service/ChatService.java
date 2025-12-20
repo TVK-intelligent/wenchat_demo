@@ -587,7 +587,13 @@ public class ChatService {
             List<ChatMessage> messages = new ArrayList<>();
             for (Map<String, Object> map : messageMaps) {
                 ChatMessage msg = new ChatMessage();
-                msg.setId(((Number) map.get("id")).longValue());
+                // Safely parse ID with null check
+                if (map.get("id") != null) {
+                    msg.setId(((Number) map.get("id")).longValue());
+                    log.debug("📨 Parsed private message id: {}", msg.getId());
+                } else {
+                    log.warn("⚠️ Private message has null ID!");
+                }
                 msg.setSenderId(((Number) map.get("senderId")).longValue());
                 msg.setSenderUsername((String) map.get("senderUsername"));
                 msg.setSenderDisplayName((String) map.get("senderDisplayName"));

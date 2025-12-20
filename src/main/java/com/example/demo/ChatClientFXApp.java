@@ -13,7 +13,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.event.ActionEvent;
-import javafx.event.ActionEvent;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import lombok.extern.slf4j.Slf4j;
@@ -357,10 +356,13 @@ public class ChatClientFXApp extends Application {
                     // Check if this is a file message
                     if (msg.getMessageType() == ChatMessage.MessageType.FILE ||
                             msg.getMessageType() == ChatMessage.MessageType.IMAGE) {
-                        contentArea.addFileMessage(displayName, msg.getFileName(), msg.getContent(),
-                                msg.getTimestamp(), isMine);
+                        // Pass message ID for recall functionality
+                        contentArea.addFileMessage(msg.getId(), displayName, msg.getFileName(), msg.getContent(),
+                                msg.getTimestamp(), isMine, msg.isRecalled());
                     } else {
-                        contentArea.addMessage(displayName, msg.getContent(), msg.getTimestamp(), isMine);
+                        // Pass message ID for recall functionality
+                        contentArea.addMessage(msg.getId(), displayName, msg.getContent(), msg.getTimestamp(), isMine,
+                                msg.isRecalled());
                     }
                 }
             }
@@ -391,23 +393,24 @@ public class ChatClientFXApp extends Application {
 
             // Handle local UI update for recalled message or new incoming message
             javafx.application.Platform.runLater(() -> {
-                String displayName = expectedUser.getDisplayName() != null ? expectedUser.getDisplayName()
-                        : expectedUser.getUsername();
-
                 boolean isMine = message.getSenderId().equals(currentUserId);
+                String displayName = isMine ? currentUsername
+                        : (expectedUser.getDisplayName() != null ? expectedUser.getDisplayName()
+                                : expectedUser.getUsername());
 
                 if (message.isRecalled()) {
                     contentArea.updateMessageAsRecalled(message.getId());
-                } else if (!isMine) { // Only add new messages if not mine (we add mine immediately in sendMessage)
+                } else {
+                    // Add ALL messages from server (both mine and others) - server provides the ID
                     // Check if this is a file message
                     if (message.getMessageType() == ChatMessage.MessageType.FILE ||
                             message.getMessageType() == ChatMessage.MessageType.IMAGE) {
                         contentArea.addFileMessage(message.getId(), displayName, message.getFileName(),
                                 message.getContent(),
-                                message.getTimestamp(), false, false);
+                                message.getTimestamp(), isMine, false);
                     } else {
                         contentArea.addMessage(message.getId(), displayName, message.getContent(),
-                                message.getTimestamp(), false, false);
+                                message.getTimestamp(), isMine, false);
                     }
                 }
             });
@@ -908,13 +911,10 @@ public class ChatClientFXApp extends Application {
                 if (webSocketClient != null && webSocketClient.isConnected()) {
                     // Check if we're in private chat mode
                     if (contentArea.isPrivateMode() && contentArea.getPrivateChatUser() != null) {
-                        // Send private message
+                        // Send private message - server will echo back with ID via WebSocket
                         User privateChatUser = contentArea.getPrivateChatUser();
                         webSocketClient.sendPrivateMessage(privateChatUser.getId(), message);
-
-                        // Add to local display immediately
-                        contentArea.addMessage(null, currentUsername, message, java.time.LocalDateTime.now(), true,
-                                false);
+                        // Message will appear via handlePrivateChatMessage callback with proper ID
                         contentArea.getInputField().clear();
                     } else {
                         // Send to current room
@@ -1117,21 +1117,61 @@ public class ChatClientFXApp extends Application {
     }
 
     /**
-     * Handle private message notification (for notifications only, not display)
+     * Handle private message notification (for notifications AND display)
      */
     private void handlePrivateMessageNotification(ChatMessage message) {
         if (message == null)
             return;
 
-        // Skip if it's our own message
+        // Check if we're viewing a private chat
+        User privateChatUser = contentArea.getPrivateChatUser();
+        boolean isInPrivateMode = contentArea.isPrivateMode() && privateChatUser != null;
+
+        // Check if this message is for the current private chat
+        boolean isForCurrentChat = false;
+        if (isInPrivateMode) {
+            // Message from the user we're chatting with, sent to us
+            boolean isFromChatPartner = message.getSenderId().equals(privateChatUser.getId())
+                    && message.getRecipientId() != null
+                    && message.getRecipientId().equals(currentUserId);
+            // Message from us, sent to the user we're chatting with
+            boolean isFromMe = message.getSenderId().equals(currentUserId)
+                    && message.getRecipientId() != null
+                    && message.getRecipientId().equals(privateChatUser.getId());
+            isForCurrentChat = isFromChatPartner || isFromMe;
+        }
+
+        // Display message in UI if we're in the relevant private chat
+        if (isForCurrentChat) {
+            Platform.runLater(() -> {
+                boolean isMine = message.getSenderId().equals(currentUserId);
+                String displayName = isMine ? currentUsername
+                        : (privateChatUser.getDisplayName() != null ? privateChatUser.getDisplayName()
+                                : privateChatUser.getUsername());
+
+                if (message.isRecalled()) {
+                    contentArea.updateMessageAsRecalled(message.getId());
+                } else {
+                    // Check if this is a file message
+                    if (message.getMessageType() == ChatMessage.MessageType.FILE ||
+                            message.getMessageType() == ChatMessage.MessageType.IMAGE) {
+                        contentArea.addFileMessage(message.getId(), displayName, message.getFileName(),
+                                message.getContent(), message.getTimestamp(), isMine, false);
+                    } else {
+                        contentArea.addMessage(message.getId(), displayName, message.getContent(),
+                                message.getTimestamp(), isMine, false);
+                    }
+                }
+            });
+        }
+
+        // Skip notification for own messages
         if (message.getSenderId().equals(currentUserId)) {
             return;
         }
 
-        // Check if we're viewing this private chat
-        User privateChatUser = contentArea.getPrivateChatUser();
-        boolean isViewingThisChat = contentArea.isPrivateMode()
-                && privateChatUser != null
+        // Check if we're viewing this specific private chat
+        boolean isViewingThisChat = isInPrivateMode
                 && privateChatUser.getId().equals(message.getSenderId());
 
         // Show notification if not viewing this chat or window not focused
