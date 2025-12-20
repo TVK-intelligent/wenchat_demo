@@ -419,36 +419,70 @@ public class WebSocketClient {
         if (stompSession == null || !connected)
             return;
 
-        String destination = "/user/queue/friend-requests";
+        // Method 1: Subscribe to user queue
+        String userQueueDestination = "/user/queue/friend-requests";
         String subscriptionName = "friend-requests";
 
-        if (subscriptionIds.containsKey(subscriptionName)) {
-            log.debug("Already subscribed to {}", subscriptionName);
-            return;
+        if (!subscriptionIds.containsKey(subscriptionName)) {
+            try {
+                StompSession.Subscription subscription = stompSession.subscribe(userQueueDestination,
+                        new StompFrameHandler() {
+                            @Override
+                            @NonNull
+                            public Type getPayloadType(@NonNull StompHeaders headers) {
+                                return byte[].class;
+                            }
+
+                            @Override
+                            public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                                FriendRequestNotification notification = parsePayload(payload,
+                                        FriendRequestNotification.class);
+                                if (notification != null) {
+                                    log.info("👋 Received friend request via user queue from: {}",
+                                            notification.getSenderUsername());
+                                    callback.accept(notification);
+                                }
+                            }
+                        });
+
+                subscriptionIds.put(subscriptionName, subscription);
+                log.info("Subscribed to friend requests (user queue)");
+            } catch (Exception e) {
+                log.error("Failed to subscribe to friend requests user queue: " + e.getMessage());
+            }
         }
 
-        try {
-            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
-                @Override
-                @NonNull
-                public Type getPayloadType(@NonNull StompHeaders headers) {
-                    return byte[].class;
-                }
+        // Method 2: Subscribe to topic fallback
+        String topicDestination = "/topic/friend-requests/" + currentUserId;
+        String topicSubscriptionName = "friend-requests-topic";
 
-                @Override
-                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
-                    FriendRequestNotification notification = parsePayload(payload, FriendRequestNotification.class);
-                    if (notification != null) {
-                        log.info("Received friend request from: {}", notification.getSenderUsername());
-                        callback.accept(notification);
-                    }
-                }
-            });
+        if (!subscriptionIds.containsKey(topicSubscriptionName) && currentUserId != null) {
+            try {
+                StompSession.Subscription subscription = stompSession.subscribe(topicDestination,
+                        new StompFrameHandler() {
+                            @Override
+                            @NonNull
+                            public Type getPayloadType(@NonNull StompHeaders headers) {
+                                return byte[].class;
+                            }
 
-            subscriptionIds.put(subscriptionName, subscription);
-            log.info("Subscribed to friend requests");
-        } catch (Exception e) {
-            log.error("Failed to subscribe to friend requests: " + e.getMessage());
+                            @Override
+                            public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                                FriendRequestNotification notification = parsePayload(payload,
+                                        FriendRequestNotification.class);
+                                if (notification != null) {
+                                    log.info("👋 Received friend request via topic from: {}",
+                                            notification.getSenderUsername());
+                                    callback.accept(notification);
+                                }
+                            }
+                        });
+
+                subscriptionIds.put(topicSubscriptionName, subscription);
+                log.info("Subscribed to friend requests (topic fallback): {}", topicDestination);
+            } catch (Exception e) {
+                log.error("Failed to subscribe to friend requests topic: " + e.getMessage());
+            }
         }
     }
 
