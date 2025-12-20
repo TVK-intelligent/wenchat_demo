@@ -5,6 +5,10 @@ import com.example.demo.client.model.User;
 import com.example.demo.client.service.ChatService;
 import com.example.demo.client.websocket.WebSocketClient;
 import javafx.animation.FadeTransition;
+import javafx.animation.Interpolator;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.animation.TranslateTransition;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -429,9 +433,8 @@ public class PrivateChatDialog extends Stage {
         alignmentBox.setTranslateY(15);
 
         messageListView.getItems().add(alignmentBox);
-        javafx.application.Platform.runLater(() -> {
-            messageListView.scrollTo(messageListView.getItems().size() - 1);
-        });
+        // Smooth scroll to bottom
+        smoothScrollToBottom();
 
         // Fade + Slide animation
         FadeTransition fade = new FadeTransition(Duration.millis(200), alignmentBox);
@@ -487,6 +490,61 @@ public class PrivateChatDialog extends Stage {
         avatarPane.setMinSize(32, 32);
         avatarPane.setMaxSize(32, 32);
         return avatarPane;
+    }
+
+    /**
+     * Smooth scroll to bottom with animation - Zalo-like smooth scrolling
+     */
+    private void smoothScrollToBottom() {
+        if (messageListView == null || messageListView.getItems().isEmpty()) {
+            return;
+        }
+
+        // Delay slightly to ensure new item is fully rendered
+        javafx.application.Platform.runLater(() -> {
+            // Another runLater to ensure the layout pass is complete
+            javafx.application.Platform.runLater(() -> {
+                // Get the virtual flow (internal scroll container)
+                Object virtualFlow = messageListView.lookup(".virtual-flow");
+                if (virtualFlow instanceof javafx.scene.layout.Region) {
+                    ScrollBar scrollBar = null;
+                    for (javafx.scene.Node node : messageListView.lookupAll(".scroll-bar")) {
+                        if (node instanceof ScrollBar) {
+                            ScrollBar sb = (ScrollBar) node;
+                            if (sb.getOrientation() == javafx.geometry.Orientation.VERTICAL) {
+                                scrollBar = sb;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (scrollBar != null) {
+                        final ScrollBar verticalScrollBar = scrollBar;
+                        double currentValue = verticalScrollBar.getValue();
+                        double endValue = verticalScrollBar.getMax();
+
+                        // Only animate if not already at bottom
+                        if (Math.abs(currentValue - endValue) > 0.01) {
+                            // Create smooth animation with Zalo-like feel
+                            Timeline timeline = new Timeline();
+                            KeyValue keyValue = new KeyValue(
+                                    verticalScrollBar.valueProperty(),
+                                    endValue,
+                                    Interpolator.SPLINE(0.25, 0.1, 0.25, 1.0)); // Cubic-bezier like CSS ease
+                            KeyFrame keyFrame = new KeyFrame(Duration.millis(350), keyValue);
+                            timeline.getKeyFrames().add(keyFrame);
+                            timeline.play();
+                        }
+                    } else {
+                        // Fallback: use scrollTo if scrollbar not found
+                        messageListView.scrollTo(messageListView.getItems().size() - 1);
+                    }
+                } else {
+                    // Fallback: use scrollTo if virtual flow not found
+                    messageListView.scrollTo(messageListView.getItems().size() - 1);
+                }
+            });
+        });
     }
 
     private void showError(String title, String message) {

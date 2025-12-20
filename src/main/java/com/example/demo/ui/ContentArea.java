@@ -349,11 +349,13 @@ public class ContentArea extends BorderPane {
         for (String emoji : emojis) {
             Button emojiButton = new Button(emoji);
             String defaultStyle = "-fx-background-color: transparent; " +
+                    "-fx-font-family: 'Segoe UI Emoji'; " +
                     "-fx-font-size: 20px; " +
                     "-fx-padding: 4; " +
                     "-fx-cursor: hand; " +
                     "-fx-min-width: 36; -fx-min-height: 36;";
             String hoverStyle = "-fx-background-color: " + hoverBgColor + "; " +
+                    "-fx-font-family: 'Segoe UI Emoji'; " +
                     "-fx-font-size: 20px; " +
                     "-fx-padding: 4; " +
                     "-fx-cursor: hand; " +
