@@ -378,21 +378,133 @@ public class NotificationService {
     }
 
     /**
-     * Show friend request notification
+     * Show friend request notification - ALWAYS plays sound
      */
     public void showFriendRequestNotification(String senderName) {
         String title = "👋 Lời mời kết bạn";
         String message = senderName + " muốn kết bạn với bạn";
-        showNotification(NotificationType.FRIEND_REQUEST, title, message);
+
+        // Always play sound for friend requests (important notifications)
+        if (soundEnabled && globalEnabled) {
+            playNotificationSound(NotificationType.FRIEND_REQUEST);
+        }
+
+        // Show desktop notification only if window is not focused
+        if (!windowFocused) {
+            showNotification(NotificationType.FRIEND_REQUEST, title, message);
+        } else {
+            // Show in-app toast when window is focused
+            showInAppToast(title, message);
+        }
     }
 
     /**
-     * Show room invite notification
+     * Show room invite notification - ALWAYS plays sound
      */
     public void showRoomInviteNotification(String inviterName, String roomName) {
         String title = "🏠 Lời mời vào phòng";
         String message = inviterName + " mời bạn vào phòng " + roomName;
-        showNotification(NotificationType.ROOM_INVITE, title, message);
+
+        // Always play sound for room invites (important notifications)
+        if (soundEnabled && globalEnabled) {
+            playNotificationSound(NotificationType.ROOM_INVITE);
+        }
+
+        // Show desktop notification only if window is not focused
+        if (!windowFocused) {
+            showNotification(NotificationType.ROOM_INVITE, title, message);
+        } else {
+            // Show in-app toast when window is focused
+            showInAppToast(title, message);
+        }
+    }
+
+    /**
+     * Show an in-app toast notification (when window is focused)
+     * This creates a small popup inside the application
+     */
+    public void showInAppToast(String title, String message) {
+        if (primaryStage == null || !globalEnabled) {
+            return;
+        }
+
+        Platform.runLater(() -> {
+            try {
+                // Create toast notification
+                javafx.scene.layout.VBox toast = new javafx.scene.layout.VBox(4);
+                toast.setStyle(
+                        "-fx-background-color: linear-gradient(to right, #667eea, #764ba2);" +
+                                "-fx-background-radius: 10;" +
+                                "-fx-padding: 12 16 12 16;" +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 10, 0, 0, 4);");
+                toast.setMaxWidth(320);
+                toast.setOpacity(0);
+
+                javafx.scene.control.Label titleLabel = new javafx.scene.control.Label(title);
+                titleLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 13px;");
+
+                javafx.scene.control.Label msgLabel = new javafx.scene.control.Label(message);
+                msgLabel.setStyle("-fx-text-fill: rgba(255,255,255,0.9); -fx-font-size: 12px;");
+                msgLabel.setWrapText(true);
+
+                toast.getChildren().addAll(titleLabel, msgLabel);
+
+                // Get the scene's root
+                if (primaryStage.getScene() != null
+                        && primaryStage.getScene().getRoot() instanceof javafx.scene.layout.Pane) {
+                    javafx.scene.layout.Pane root = (javafx.scene.layout.Pane) primaryStage.getScene().getRoot();
+
+                    // Position toast at top-right
+                    toast.setLayoutX(root.getWidth() - 340);
+                    toast.setLayoutY(20);
+
+                    // Add to scene
+                    if (root instanceof javafx.scene.layout.BorderPane) {
+                        javafx.scene.layout.StackPane overlay = new javafx.scene.layout.StackPane(toast);
+                        overlay.setAlignment(javafx.geometry.Pos.TOP_RIGHT);
+                        overlay.setPadding(new javafx.geometry.Insets(20, 20, 0, 0));
+                        overlay.setMouseTransparent(true);
+                        overlay.setPickOnBounds(false);
+
+                        // Find existing overlay or create new one
+                        javafx.scene.layout.BorderPane bp = (javafx.scene.layout.BorderPane) root;
+
+                        // Add toast directly to scene
+                        javafx.scene.Group toastGroup = new javafx.scene.Group(toast);
+                        toastGroup.setManaged(false);
+                        toastGroup.setLayoutX(root.getWidth() - 340);
+                        toastGroup.setLayoutY(20);
+
+                        if (!root.getChildren().contains(toastGroup)) {
+                            root.getChildren().add(toastGroup);
+                        }
+
+                        // Fade in animation
+                        javafx.animation.FadeTransition fadeIn = new javafx.animation.FadeTransition(
+                                javafx.util.Duration.millis(300), toast);
+                        fadeIn.setFromValue(0);
+                        fadeIn.setToValue(1);
+
+                        // Fade out animation after delay
+                        javafx.animation.PauseTransition pause = new javafx.animation.PauseTransition(
+                                javafx.util.Duration.seconds(4));
+
+                        javafx.animation.FadeTransition fadeOut = new javafx.animation.FadeTransition(
+                                javafx.util.Duration.millis(500), toast);
+                        fadeOut.setFromValue(1);
+                        fadeOut.setToValue(0);
+                        fadeOut.setOnFinished(e -> root.getChildren().remove(toastGroup));
+
+                        // Play animations
+                        fadeIn.setOnFinished(e -> pause.play());
+                        pause.setOnFinished(e -> fadeOut.play());
+                        fadeIn.play();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to show in-app toast: {}", e.getMessage());
+            }
+        });
     }
 
     /**
