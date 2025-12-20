@@ -49,6 +49,9 @@ public class FriendsManagementDialog extends Stage {
             Color.web("#fa709a"), Color.web("#30cfd0")
     };
 
+    // Callback for badge refresh when accept/decline
+    private Runnable onBadgeUpdate;
+
     public FriendsManagementDialog(ChatService chatService) {
         this.chatService = chatService;
 
@@ -71,6 +74,10 @@ public class FriendsManagementDialog extends Stage {
 
     public void setOnMessageClicked(Consumer<User> callback) {
         this.onMessageClicked = callback;
+    }
+
+    public void setOnBadgeUpdate(Runnable callback) {
+        this.onBadgeUpdate = callback;
     }
 
     private void initComponents() {
@@ -569,6 +576,8 @@ public class FriendsManagementDialog extends Stage {
                 if (success) {
                     showInfo("Thành công", "Đã chấp nhận lời mời kết bạn!");
                     loadData();
+                    if (onBadgeUpdate != null)
+                        onBadgeUpdate.run();
                 } else {
                     showError("Lỗi", "Không thể chấp nhận lời mời");
                 }
@@ -585,6 +594,8 @@ public class FriendsManagementDialog extends Stage {
                 if (success) {
                     showInfo("Đã từ chối", "Đã từ chối lời mời kết bạn");
                     loadData();
+                    if (onBadgeUpdate != null)
+                        onBadgeUpdate.run();
                 } else {
                     showError("Lỗi", "Không thể từ chối lời mời");
                 }

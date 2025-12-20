@@ -55,6 +55,9 @@ public class RoomManagementDialog extends Stage {
     // Callback for room selection
     private Consumer<ChatRoom> onRoomSelected;
 
+    // Callback for badge refresh when accept/decline invite
+    private Runnable onBadgeUpdate;
+
     private Button createBeautifulButton(String icon, String text, String bgColor) {
         return Sidebar.createBeautifulButton(icon, text, bgColor);
     }
@@ -69,7 +72,6 @@ public class RoomManagementDialog extends Stage {
         setHeight(700);
 
         initComponents();
-        loadData();
         setupEventHandlers();
 
         Scene scene = new Scene(createLayout());
@@ -77,10 +79,18 @@ public class RoomManagementDialog extends Stage {
             scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
         }
         setScene(scene);
+
+        // Load data AFTER layout is created (pendingInvitesList is initialized in
+        // createLayout)
+        loadData();
     }
 
     public void setOnRoomSelected(Consumer<ChatRoom> callback) {
         this.onRoomSelected = callback;
+    }
+
+    public void setOnBadgeUpdate(Runnable callback) {
+        this.onBadgeUpdate = callback;
     }
 
     private void initComponents() {
@@ -799,6 +809,13 @@ public class RoomManagementDialog extends Stage {
                     if (success) {
                         showInfo("Thành công", "Đã tham gia phòng: " + roomName);
                         loadData(); // Refresh data
+                        System.out.println("🔄 Room invite accepted, calling badge update callback...");
+                        if (onBadgeUpdate != null) {
+                            onBadgeUpdate.run();
+                            System.out.println("✅ Badge update callback executed");
+                        } else {
+                            System.out.println("⚠️ onBadgeUpdate is null!");
+                        }
                     } else {
                         showError("Lỗi", "Không thể chấp nhận lời mời");
                     }
@@ -809,6 +826,8 @@ public class RoomManagementDialog extends Stage {
                     if (success) {
                         showInfo("Đã từ chối", "Đã từ chối lời mời vào phòng");
                         loadData(); // Refresh data
+                        if (onBadgeUpdate != null)
+                            onBadgeUpdate.run();
                     } else {
                         showError("Lỗi", "Không thể từ chối lời mời");
                     }

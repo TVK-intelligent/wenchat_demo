@@ -1,6 +1,7 @@
 package com.example.demo.client.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 @Builder
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class RoomInviteNotification {
+    @JsonProperty("inviteId")
     private Long id;
     private Long roomId;
     private String roomName;

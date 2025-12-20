@@ -204,6 +204,24 @@ public class ChatClientFXApp extends Application {
         sidebar.setOnFriendMessageClicked(friend -> {
             openPrivateChatWithUser(friend);
         });
+
+        // Join public room handler
+        sidebar.setOnJoinPublicRoom(roomId -> {
+            boolean success = chatService.joinRoom(roomId);
+            if (success) {
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Thành công");
+                    alert.setHeaderText(null);
+                    alert.setContentText("Đã tham gia phòng!");
+                    alert.show();
+                    loadRooms(); // Refresh my rooms
+                    loadPublicRooms(); // Refresh public rooms (remove joined room)
+                });
+            } else {
+                Platform.runLater(() -> showError("Lỗi", "Không thể tham gia phòng"));
+            }
+        });
     }
 
     private void showSettingsDialog() {
@@ -279,6 +297,9 @@ public class ChatClientFXApp extends Application {
         }
 
         RoomManagementDialog dialog = new RoomManagementDialog(chatService);
+        dialog.setOnBadgeUpdate(() -> {
+            loadInitialBadgeCounts(); // Reload badge counts when accept/decline
+        });
         dialog.showAndWait();
     }
 
@@ -291,6 +312,9 @@ public class ChatClientFXApp extends Application {
         FriendsManagementDialog dialog = new FriendsManagementDialog(chatService);
         dialog.setOnMessageClicked(friend -> {
             openPrivateChatWithUser(friend);
+        });
+        dialog.setOnBadgeUpdate(() -> {
+            loadInitialBadgeCounts(); // Reload badge counts when accept/decline
         });
         dialog.showAndWait();
         // Reload friends after dialog closes
@@ -626,6 +650,13 @@ public class ChatClientFXApp extends Application {
                     if (currentUser != null) {
                         sidebar.setCurrentUserAvatar(currentUser.getAvatarUrl(), currentUsername);
                     }
+
+                    // Load initial badge counts from backend
+                    loadInitialBadgeCounts();
+
+                    // Load public rooms for sidebar
+                    loadPublicRooms();
+
                     loginSuccess[0] = true;
                     // Allow dialog to close
                 } else {
@@ -749,6 +780,8 @@ public class ChatClientFXApp extends Application {
 
                     // Subscribe to room
                     webSocketClient.subscribeToRoom(currentRoomId, this::handleIncomingMessage);
+                    // Subscribe to room recall notifications for real-time recall updates
+                    webSocketClient.subscribeToRoomRecall(currentRoomId, this::handleMessageRecall);
                     appendMessage("✅ Đã tham gia phòng: " + firstRoom.getName());
                 }
             } else {
@@ -883,11 +916,14 @@ public class ChatClientFXApp extends Application {
                     // Unsubscribe from current room
                     if (webSocketClient != null && currentRoomId != null && !currentRoomId.equals(targetRoom.getId())) {
                         webSocketClient.unsubscribeFromRoom(currentRoomId);
+                        webSocketClient.unsubscribeFromRoomRecall(currentRoomId);
                     }
 
                     // Subscribe to new room
                     if (webSocketClient != null && webSocketClient.isConnected()) {
                         webSocketClient.subscribeToRoom(targetRoom.getId(), this::handleIncomingMessage);
+                        // Subscribe to room recall notifications for real-time recall updates
+                        webSocketClient.subscribeToRoomRecall(targetRoom.getId(), this::handleMessageRecall);
                         currentRoomId = targetRoom.getId();
                         appendMessage("✅ Đã chuyển sang phòng: " + targetRoom.getName());
 
@@ -1114,6 +1150,62 @@ public class ChatClientFXApp extends Application {
         Platform.runLater(() -> {
             sidebar.incrementRoomInviteBadge();
         });
+    }
+
+    /**
+     * Load initial badge counts from backend (pending friend requests and room
+     * invites)
+     */
+    private void loadInitialBadgeCounts() {
+        try {
+            // Load pending friend requests count
+            var pendingFriendRequests = chatService.getPendingRequests();
+            int friendRequestCount = pendingFriendRequests != null ? pendingFriendRequests.size() : 0;
+            log.info("📊 Pending friend requests from backend: {} items", friendRequestCount);
+            if (pendingFriendRequests != null && !pendingFriendRequests.isEmpty()) {
+                for (var req : pendingFriendRequests) {
+                    log.info("   - Request: {}", req);
+                }
+            }
+
+            // Load pending room invites count
+            var pendingRoomInvites = chatService.getPendingRoomInvites();
+            int roomInviteCount = pendingRoomInvites != null ? pendingRoomInvites.size() : 0;
+            log.info("📊 Pending room invites from backend: {} items (User: {})", roomInviteCount, currentUsername);
+            if (pendingRoomInvites != null && !pendingRoomInvites.isEmpty()) {
+                for (var inv : pendingRoomInvites) {
+                    log.info("   - Invite: roomName={}, inviterId={}, inviteeId={}",
+                            inv.get("roomName"),
+                            inv.get("inviter") != null ? ((java.util.Map) inv.get("inviter")).get("id") : "null",
+                            inv.get("invitee") != null ? ((java.util.Map) inv.get("invitee")).get("id") : "null");
+                }
+            }
+
+            // Update sidebar badges
+            Platform.runLater(() -> {
+                sidebar.setFriendRequestBadgeCount(friendRequestCount);
+                sidebar.setRoomInviteBadgeCount(roomInviteCount);
+                log.info("📊 Set badge counts - Friends: {}, Room invites: {} (calling sidebar update)",
+                        friendRequestCount, roomInviteCount);
+            });
+        } catch (Exception e) {
+            log.error("Failed to load initial badge counts: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Load public rooms into sidebar
+     */
+    private void loadPublicRooms() {
+        try {
+            var publicRooms = chatService.getPublicRooms();
+            Platform.runLater(() -> {
+                sidebar.loadPublicRooms(publicRooms);
+                log.info("🌐 Loaded {} public rooms", publicRooms != null ? publicRooms.size() : 0);
+            });
+        } catch (Exception e) {
+            log.error("Failed to load public rooms: " + e.getMessage());
+        }
     }
 
     /**

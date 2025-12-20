@@ -38,6 +38,7 @@ public class Sidebar extends VBox {
     private Label onlineCountLabel;
     private Label friendsCountLabel;
     private TabPane sidebarTabs;
+    private ListView<String> publicRoomsListView; // Public rooms list
 
     private Consumer<String> onRoomSelected;
     private Consumer<Void> onSettingsClicked;
@@ -48,6 +49,7 @@ public class Sidebar extends VBox {
     private Consumer<Void> onHistoryClicked;
     private Consumer<String> onUserClicked;
     private Consumer<com.example.demo.client.model.User> onFriendMessageClicked;
+    private Consumer<Long> onJoinPublicRoom; // Callback for joining public room
 
     // Store friends for direct access
     private List<com.example.demo.client.model.User> loadedFriends;
@@ -64,6 +66,8 @@ public class Sidebar extends VBox {
     private int friendRequestBadgeCount = 0;
     private int roomInviteBadgeCount = 0;
     private Label dmBadgeLabel;
+    private Label friendsBadgeLabel; // Badge for friend requests on friends icon
+    private Label roomInviteBadgeLabel; // Badge for room invites
 
     public Sidebar() {
         super(0);
@@ -136,10 +140,10 @@ public class Sidebar extends VBox {
         quickActions.setAlignment(Pos.CENTER);
         quickActions.setStyle("-fx-background-color: rgba(0,0,0,0.15); -fx-background-radius: 15;");
 
-        profileButton = createQuickButton("👤", "Profile", "#FF6B6B");
-        friendsButton = createQuickButton("👥", "Friends", "#4ECDC4");
-        Button roomManageButton = createQuickButton("🏠", "Phòng", "#45B7D1");
-        settingsButton = createQuickButton("⚙️", "Settings", "#96CEB4");
+        profileButton = createQuickButton("\uD83D\uDC64", "Profile", "#FF6B6B"); // 👤
+        friendsButton = createQuickButton("\uD83D\uDC65", "Friends", "#4ECDC4"); // 👥
+        Button roomManageButton = createQuickButton("\uD83C\uDFE0", "Phòng", "#45B7D1"); // 🏠
+        settingsButton = createQuickButton("\u2699", "Settings", "#96CEB4"); // ⚙
 
         profileButton.setOnAction(e -> {
             if (onProfileClicked != null)
@@ -158,13 +162,53 @@ public class Sidebar extends VBox {
                 onSettingsClicked.accept(null);
         });
 
-        quickActions.getChildren().addAll(profileButton, friendsButton, roomManageButton, settingsButton);
+        // Create StackPanes with badge overlays for Friends and Room buttons
+        StackPane friendsPane = createButtonWithBadge(friendsButton, true);
+        StackPane roomPane = createButtonWithBadge(roomManageButton, false);
+
+        quickActions.getChildren().addAll(profileButton, friendsPane, roomPane, settingsButton);
 
         VBox navContainer = new VBox(10);
         navContainer.setPadding(new Insets(5, 15, 5, 15));
         navContainer.getChildren().add(quickActions);
 
         getChildren().add(navContainer);
+    }
+
+    /**
+     * Create a button wrapped in StackPane with a badge overlay
+     * 
+     * @param button         The button to wrap
+     * @param isFriendsBadge true for friends badge, false for room invites badge
+     */
+    private StackPane createButtonWithBadge(Button button, boolean isFriendsBadge) {
+        StackPane pane = new StackPane();
+        pane.setAlignment(Pos.TOP_RIGHT);
+
+        // Create badge label
+        Label badge = new Label("0");
+        badge.setStyle(
+                "-fx-background-color: #FF3B30; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-font-size: 10px; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-padding: 2 6 2 6; " +
+                        "-fx-background-radius: 10; " +
+                        "-fx-min-width: 18; " +
+                        "-fx-min-height: 18; " +
+                        "-fx-alignment: center;");
+        badge.setVisible(false);
+        badge.setTranslateX(5);
+        badge.setTranslateY(-5);
+
+        if (isFriendsBadge) {
+            friendsBadgeLabel = badge;
+        } else {
+            roomInviteBadgeLabel = badge;
+        }
+
+        pane.getChildren().addAll(button, badge);
+        return pane;
     }
 
     private Button createQuickButton(String icon, String tooltip, String bgColor) {
@@ -216,7 +260,11 @@ public class Sidebar extends VBox {
         Tab onlineTab = new Tab("🟢 Online");
         onlineTab.setContent(createOnlineUsersTab());
 
-        sidebarTabs.getTabs().addAll(dmTab, roomsTab, onlineTab);
+        // Public Rooms Tab
+        Tab publicTab = new Tab("🌐 Public");
+        publicTab.setContent(createPublicRoomsTab());
+
+        sidebarTabs.getTabs().addAll(dmTab, roomsTab, publicTab, onlineTab);
 
         tabbedContainer.getChildren().add(sidebarTabs);
         getChildren().add(tabbedContainer);
@@ -347,6 +395,136 @@ public class Sidebar extends VBox {
         HBox.setHgrow(btn, Priority.ALWAYS);
         btn.setMaxWidth(Double.MAX_VALUE);
         return btn;
+    }
+
+    private VBox createPublicRoomsTab() {
+        VBox publicBox = new VBox(10);
+        publicBox.setPadding(new Insets(12, 8, 8, 8));
+        publicBox.setStyle("-fx-background-color: rgba(0,0,0,0.1); -fx-background-radius: 12;");
+
+        // Header
+        HBox header = new HBox(10);
+        header.setAlignment(Pos.CENTER_LEFT);
+        header.setPadding(new Insets(8, 12, 8, 12));
+        header.setStyle("-fx-background-color: linear-gradient(to right, #11998e, #38ef7d); " +
+                "-fx-background-radius: 10; -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 5, 0, 0, 2);");
+
+        Label iconLabel = new Label("🌐");
+        iconLabel.setStyle("-fx-font-size: 18px;");
+
+        Label titleLabel = new Label("Phòng Công Khai");
+        titleLabel.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold;");
+
+        header.getChildren().addAll(iconLabel, titleLabel);
+
+        // Public rooms list
+        publicRoomsListView = new ListView<>();
+        publicRoomsListView.setStyle(
+                "-fx-background-color: rgba(255,255,255,0.95); " +
+                        "-fx-background-radius: 12; -fx-border-radius: 12; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 8, 0, 0, 3);");
+        publicRoomsListView.setCellFactory(param -> new PublicRoomCell());
+        publicRoomsListView.setPlaceholder(new Label("Không có phòng công khai nào"));
+        VBox.setVgrow(publicRoomsListView, Priority.ALWAYS);
+
+        publicBox.getChildren().addAll(header, publicRoomsListView);
+        return publicBox;
+    }
+
+    /**
+     * Load public rooms into the sidebar
+     */
+    public void loadPublicRooms(List<com.example.demo.client.model.ChatRoom> rooms) {
+        if (publicRoomsListView == null)
+            return;
+        publicRoomsListView.getItems().clear();
+        for (com.example.demo.client.model.ChatRoom room : rooms) {
+            // Store as "roomId|roomName|memberCount" format
+            String item = room.getId() + "|" + room.getName() + "|" + room.getMemberCount();
+            publicRoomsListView.getItems().add(item);
+        }
+    }
+
+    /**
+     * Set callback for joining public room
+     */
+    public void setOnJoinPublicRoom(Consumer<Long> handler) {
+        this.onJoinPublicRoom = handler;
+    }
+
+    /**
+     * Cell for public room list with Join button
+     */
+    private class PublicRoomCell extends ListCell<String> {
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                setText(null);
+                setGraphic(null);
+            } else {
+                // Parse item: "roomId|roomName|memberCount"
+                String[] parts = item.split("\\|");
+                Long roomId = Long.valueOf(parts[0]);
+                String roomName = parts.length > 1 ? parts[1] : "Unknown";
+                int memberCount = parts.length > 2 ? Integer.parseInt(parts[2]) : 0;
+
+                HBox roomBox = new HBox(10);
+                roomBox.setAlignment(Pos.CENTER_LEFT);
+                roomBox.setPadding(new Insets(10, 12, 10, 12));
+                roomBox.setStyle("-fx-background-color: white; -fx-background-radius: 10;");
+
+                // Room icon
+                StackPane iconPane = new StackPane();
+                Circle roomIcon = new Circle(18);
+                int hash = Math.abs(roomName.hashCode());
+                roomIcon.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
+                roomIcon.setEffect(new DropShadow(4, Color.web("#00000020")));
+                Label iconEmoji = new Label("🌐");
+                iconEmoji.setStyle("-fx-font-size: 12px;");
+                iconPane.getChildren().addAll(roomIcon, iconEmoji);
+
+                // Info
+                VBox infoBox = new VBox(2);
+                Label nameLabel = new Label(roomName);
+                nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px; -fx-text-fill: #212529;");
+                Label memberLabel = new Label("👥 " + memberCount + " thành viên");
+                memberLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #6c757d;");
+                infoBox.getChildren().addAll(nameLabel, memberLabel);
+
+                Region spacer = new Region();
+                HBox.setHgrow(spacer, Priority.ALWAYS);
+
+                // Join button
+                Button joinBtn = new Button("Tham gia");
+                joinBtn.setStyle(
+                        "-fx-background-color: #4ade80; -fx-text-fill: white; " +
+                                "-fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 12; -fx-cursor: hand;");
+                joinBtn.setOnMouseEntered(e -> joinBtn.setStyle(
+                        "-fx-background-color: #22c55e; -fx-text-fill: white; " +
+                                "-fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 12; -fx-cursor: hand;"));
+                joinBtn.setOnMouseExited(e -> joinBtn.setStyle(
+                        "-fx-background-color: #4ade80; -fx-text-fill: white; " +
+                                "-fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 12; -fx-cursor: hand;"));
+                joinBtn.setOnAction(e -> {
+                    if (onJoinPublicRoom != null) {
+                        onJoinPublicRoom.accept(roomId);
+                    }
+                });
+
+                roomBox.getChildren().addAll(iconPane, infoBox, spacer, joinBtn);
+
+                // Hover effect
+                roomBox.setOnMouseEntered(e -> roomBox.setStyle(
+                        "-fx-background-color: #f8f9fa; -fx-background-radius: 10;"));
+                roomBox.setOnMouseExited(e -> roomBox.setStyle(
+                        "-fx-background-color: white; -fx-background-radius: 10;"));
+
+                setGraphic(roomBox);
+                setText(null);
+                setStyle("-fx-background-color: transparent; -fx-padding: 3 0;");
+            }
+        }
     }
 
     private VBox createOnlineUsersTab() {
@@ -664,6 +842,22 @@ public class Sidebar extends VBox {
     }
 
     /**
+     * Set specific friend request badge count (for initial load from backend)
+     */
+    public void setFriendRequestBadgeCount(int count) {
+        friendRequestBadgeCount = count;
+        updateFriendsBadge();
+    }
+
+    /**
+     * Set specific room invite badge count (for initial load from backend)
+     */
+    public void setRoomInviteBadgeCount(int count) {
+        roomInviteBadgeCount = count;
+        updateInvitesBadge();
+    }
+
+    /**
      * Increment unread count for a specific friend
      */
     public void incrementUnreadCount(Long friendId) {
@@ -708,20 +902,34 @@ public class Sidebar extends VBox {
     }
 
     private void updateFriendsBadge() {
-        // Update friends button to show badge
-        if (friendRequestBadgeCount > 0) {
-            friendsButton.setText("👥 " + friendRequestBadgeCount);
-        } else {
-            friendsButton.setText("👥");
+        // Update visual badge overlay on friends icon
+        if (friendsBadgeLabel != null) {
+            if (friendRequestBadgeCount > 0) {
+                friendsBadgeLabel.setText(String.valueOf(friendRequestBadgeCount));
+                friendsBadgeLabel.setVisible(true);
+            } else {
+                friendsBadgeLabel.setVisible(false);
+            }
         }
     }
 
     private void updateInvitesBadge() {
-        // Update invites button to show badge
-        if (roomInviteBadgeCount > 0) {
-            invitesButton.setText("📨 " + roomInviteBadgeCount);
-        } else {
-            invitesButton.setText("📨 Lời mời");
+        // Update visual badge overlay on room icon
+        if (roomInviteBadgeLabel != null) {
+            if (roomInviteBadgeCount > 0) {
+                roomInviteBadgeLabel.setText(String.valueOf(roomInviteBadgeCount));
+                roomInviteBadgeLabel.setVisible(true);
+            } else {
+                roomInviteBadgeLabel.setVisible(false);
+            }
+        }
+        // Also update invites button in Rooms tab if exists
+        if (invitesButton != null) {
+            if (roomInviteBadgeCount > 0) {
+                invitesButton.setText("📨 " + roomInviteBadgeCount);
+            } else {
+                invitesButton.setText("📨 Lời mời");
+            }
         }
     }
 

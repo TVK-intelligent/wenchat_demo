@@ -511,18 +511,126 @@ public class WebSocketClient {
 
                 @Override
                 public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    log.info("🏠 Room invite WebSocket frame received! Parsing payload...");
+                    if (payload != null) {
+                        log.info("🏠 Payload type: {}, length: {}", payload.getClass().getName(),
+                                payload instanceof byte[] ? ((byte[]) payload).length : "N/A");
+                        if (payload instanceof byte[]) {
+                            log.info("🏠 Raw payload: {}", new String((byte[]) payload));
+                        }
+                    }
                     RoomInviteNotification notification = parsePayload(payload, RoomInviteNotification.class);
                     if (notification != null) {
-                        log.info("Received room invite to: {}", notification.getRoomName());
+                        log.info("🏠 Received room invite to: {}", notification.getRoomName());
                         callback.accept(notification);
+                    } else {
+                        log.warn("🏠 Failed to parse room invite notification from payload");
                     }
                 }
             });
 
             subscriptionIds.put(subscriptionName, subscription);
-            log.info("Subscribed to room invites");
+            log.info("Subscribed to room invites (user queue)");
         } catch (Exception e) {
-            log.error("Failed to subscribe to room invites: " + e.getMessage());
+            log.error("Failed to subscribe to room invites user queue: " + e.getMessage());
+        }
+
+        // Method 2: Subscribe to topic fallback
+        String topicDestination = "/topic/room-invites/" + currentUserId;
+        String topicSubscriptionName = "room-invites-topic";
+
+        if (!subscriptionIds.containsKey(topicSubscriptionName) && currentUserId != null) {
+            try {
+                StompSession.Subscription subscription = stompSession.subscribe(topicDestination,
+                        new StompFrameHandler() {
+                            @Override
+                            @NonNull
+                            public Type getPayloadType(@NonNull StompHeaders headers) {
+                                return byte[].class;
+                            }
+
+                            @Override
+                            public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                                log.info("🏠 Room invite via TOPIC received! Parsing payload...");
+                                if (payload != null && payload instanceof byte[]) {
+                                    log.info("🏠 Raw payload (topic): {}", new String((byte[]) payload));
+                                }
+                                RoomInviteNotification notification = parsePayload(payload,
+                                        RoomInviteNotification.class);
+                                if (notification != null) {
+                                    log.info("🏠 Received room invite via topic to: {}", notification.getRoomName());
+                                    callback.accept(notification);
+                                } else {
+                                    log.warn("🏠 Failed to parse room invite notification from topic payload");
+                                }
+                            }
+                        });
+
+                subscriptionIds.put(topicSubscriptionName, subscription);
+                log.info("Subscribed to room invites (topic fallback): {}", topicDestination);
+            } catch (Exception e) {
+                log.error("Failed to subscribe to room invites topic: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 🔙 Subscribe to room-specific recall notifications
+     * This is needed because room recall events are broadcast to
+     * /topic/recall/room/{roomId}
+     */
+    public void subscribeToRoomRecall(Long roomId, Consumer<RecallResponse> callback) {
+        if (stompSession == null || !connected)
+            return;
+
+        String destination = "/topic/recall/room/" + roomId;
+        String subscriptionName = "room-recall-" + roomId;
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to {}", subscriptionName);
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    RecallResponse recallResponse = parsePayload(payload, RecallResponse.class);
+                    if (recallResponse != null) {
+                        log.info("🔙 Received room recall notification for message: {} in room: {}",
+                                recallResponse.getMessageId(), roomId);
+                        callback.accept(recallResponse);
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("✅ Subscribed to room recall notifications for room: {}", roomId);
+        } catch (Exception e) {
+            log.error("Failed to subscribe to room recall: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🔙 Unsubscribe from room-specific recall notifications
+     */
+    public void unsubscribeFromRoomRecall(Long roomId) {
+        String subscriptionName = "room-recall-" + roomId;
+        StompSession.Subscription subscription = subscriptionIds.get(subscriptionName);
+        if (subscription != null) {
+            try {
+                subscription.unsubscribe();
+                subscriptionIds.remove(subscriptionName);
+                log.info("Unsubscribed from room recall for room: {}", roomId);
+            } catch (Exception e) {
+                log.error("Unsubscribe from room recall failed: " + e.getMessage());
+            }
         }
     }
 

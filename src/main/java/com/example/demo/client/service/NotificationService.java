@@ -379,6 +379,8 @@ public class NotificationService {
 
     /**
      * Show friend request notification - ALWAYS plays sound
+     * Desktop notification only when window is not focused
+     * When focused: only sound, no toast
      */
     public void showFriendRequestNotification(String senderName) {
         String title = "👋 Lời mời kết bạn";
@@ -390,16 +392,16 @@ public class NotificationService {
         }
 
         // Show desktop notification only if window is not focused
+        // When focused: only sound, no visual notification needed
         if (!windowFocused) {
             showNotification(NotificationType.FRIEND_REQUEST, title, message);
-        } else {
-            // Show in-app toast when window is focused
-            showInAppToast(title, message);
         }
     }
 
     /**
      * Show room invite notification - ALWAYS plays sound
+     * Desktop notification only when window is not focused
+     * When focused: only sound, no toast
      */
     public void showRoomInviteNotification(String inviterName, String roomName) {
         String title = "🏠 Lời mời vào phòng";
@@ -411,11 +413,9 @@ public class NotificationService {
         }
 
         // Show desktop notification only if window is not focused
+        // When focused: only sound, no visual notification needed
         if (!windowFocused) {
             showNotification(NotificationType.ROOM_INVITE, title, message);
-        } else {
-            // Show in-app toast when window is focused
-            showInAppToast(title, message);
         }
     }
 
