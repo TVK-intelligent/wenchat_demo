@@ -256,13 +256,13 @@ public class Sidebar extends VBox {
         Tab roomsTab = new Tab("🏠 Rooms");
         roomsTab.setContent(createRoomsTab());
 
-        // Online Users Tab
-        Tab onlineTab = new Tab("🟢 Online");
-        onlineTab.setContent(createOnlineUsersTab());
-
         // Public Rooms Tab
         Tab publicTab = new Tab("🌐 Public");
         publicTab.setContent(createPublicRoomsTab());
+
+        // Online Now Tab
+        Tab onlineTab = new Tab("🟢 Online");
+        onlineTab.setContent(createOnlineUsersTab());
 
         sidebarTabs.getTabs().addAll(dmTab, roomsTab, publicTab, onlineTab);
 
@@ -623,6 +623,7 @@ public class Sidebar extends VBox {
 
     /**
      * Load online users
+     * Only shows users who have showOnlineStatus = true (privacy setting)
      */
     public void loadOnlineUsers(List<com.example.demo.client.model.User> users) {
         userListView.getItems().clear();
@@ -632,6 +633,13 @@ public class Sidebar extends VBox {
             for (com.example.demo.client.model.User user : users) {
                 System.out.println("🔍 Processing user: " + user);
                 if (user != null) {
+                    // Respect privacy: skip users who have disabled showOnlineStatus
+                    Boolean showOnlineStatus = user.getShowOnlineStatus();
+                    if (showOnlineStatus != null && !showOnlineStatus) {
+                        System.out.println("🔒 User has showOnlineStatus=false, skipping: " + user.getDisplayName());
+                        continue;
+                    }
+
                     String displayName = user.getDisplayName() != null ? user.getDisplayName()
                             : (user.getUsername() != null ? user.getUsername() : "Unknown User");
                     System.out.println("🔍 Adding to list: " + displayName);
@@ -642,7 +650,7 @@ public class Sidebar extends VBox {
                 }
             }
             System.out.println("✅ Added " + addedCount + " users to list");
-            onlineCountLabel.setText(String.valueOf(users.size()));
+            onlineCountLabel.setText(String.valueOf(addedCount));
         } else {
             onlineCountLabel.setText("0");
         }
@@ -749,11 +757,17 @@ public class Sidebar extends VBox {
      * Called when receiving a user online notification
      */
     public void addOnlineUser(String displayName, String username) {
-        String nameToUse = displayName != null ? displayName : username;
-        if (nameToUse != null && !userListView.getItems().contains(nameToUse)) {
+        if (userListView == null) {
+            System.out.println("⚠️ userListView is null, cannot add online user");
+            return;
+        }
+        String nameToUse = displayName != null && !displayName.isEmpty() ? displayName : username;
+        if (nameToUse != null && !nameToUse.isEmpty() && !userListView.getItems().contains(nameToUse)) {
             userListView.getItems().add(nameToUse);
-            onlineCountLabel.setText(String.valueOf(userListView.getItems().size()));
-            System.out.println("➕ Added online user: " + nameToUse);
+            if (onlineCountLabel != null) {
+                onlineCountLabel.setText(String.valueOf(userListView.getItems().size()));
+            }
+            System.out.println("➕ Added online user to Online Now tab: " + nameToUse);
         }
     }
 
@@ -762,11 +776,18 @@ public class Sidebar extends VBox {
      * Called when receiving a user offline notification
      */
     public void removeOnlineUser(String displayName, String username) {
-        String nameToRemove = displayName != null ? displayName : username;
-        if (nameToRemove != null) {
-            userListView.getItems().remove(nameToRemove);
-            onlineCountLabel.setText(String.valueOf(userListView.getItems().size()));
-            System.out.println("➖ Removed online user: " + nameToRemove);
+        if (userListView == null) {
+            System.out.println("⚠️ userListView is null, cannot remove online user");
+            return;
+        }
+        String nameToRemove = displayName != null && !displayName.isEmpty() ? displayName : username;
+        if (nameToRemove != null && !nameToRemove.isEmpty()) {
+            boolean removed = userListView.getItems().remove(nameToRemove);
+            if (onlineCountLabel != null) {
+                onlineCountLabel.setText(String.valueOf(userListView.getItems().size()));
+            }
+            System.out.println(
+                    "➖ Removed online user from Online Now tab: " + nameToRemove + " (removed=" + removed + ")");
         }
     }
 
@@ -977,22 +998,32 @@ public class Sidebar extends VBox {
 
                 // Check online status from loadedFriends
                 boolean isOnline = false;
+                boolean hideOnlineStatus = false; // Privacy: friend has disabled showOnlineStatus
                 if (loadedFriends != null) {
                     for (com.example.demo.client.model.User friend : loadedFriends) {
                         String displayName = friend.getDisplayName() != null ? friend.getDisplayName()
                                 : friend.getUsername();
                         if (displayName.equals(friendName)) {
                             isOnline = friend.getStatus() == com.example.demo.client.model.User.Status.ONLINE;
+                            // Check if friend wants to hide their online status
+                            Boolean showOnlineStatus = friend.getShowOnlineStatus();
+                            if (showOnlineStatus != null && !showOnlineStatus) {
+                                hideOnlineStatus = true;
+                            }
                             break;
                         }
                     }
                 }
 
-                // Online/Offline indicator based on actual status
+                // Online/Offline indicator based on actual status (only if not hidden)
                 VBox statusBox = new VBox(2);
                 statusBox.setAlignment(Pos.CENTER);
                 Circle statusIndicator = new Circle(7);
-                if (isOnline) {
+                if (hideOnlineStatus) {
+                    // Hidden status - don't show any indicator (invisible)
+                    statusIndicator.setFill(Color.TRANSPARENT);
+                    statusIndicator.setEffect(null);
+                } else if (isOnline) {
                     // Online - green with glow
                     statusIndicator.setFill(Color.web("#4ade80"));
                     statusIndicator.setEffect(new DropShadow(10, Color.web("#4ade80")));

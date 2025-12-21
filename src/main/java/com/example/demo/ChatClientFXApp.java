@@ -801,17 +801,44 @@ public class ChatClientFXApp extends Application {
     }
 
     private void loadOnlineUsers() {
-        log.info("🔄 Starting loadOnlineUsers...");
+        log.info("🔄 Starting loadOnlineUsers (friends only)...");
         try {
-            List<User> onlineUsers = chatService.getOnlineUsers();
-            log.info("📋 Got {} online users from API", onlineUsers != null ? onlineUsers.size() : 0);
-            if (onlineUsers != null) {
-                sidebar.loadOnlineUsers(onlineUsers);
-                log.info("✅ Online users loaded to sidebar");
+            // Get friends list and filter to only show online friends
+            List<java.util.Map<String, Object>> friendsData = chatService.getFriends();
+            List<User> onlineFriends = new ArrayList<>();
+
+            if (friendsData != null) {
+                for (java.util.Map<String, Object> data : friendsData) {
+                    Long friendId = Long.valueOf(data.get("id").toString());
+                    // Skip current user
+                    if (currentUserId != null && friendId.equals(currentUserId)) {
+                        continue;
+                    }
+
+                    // Check if friend is online and allows showing status
+                    String status = data.get("status") != null ? data.get("status").toString() : "OFFLINE";
+                    Object showOnlineStatusObj = data.get("showOnlineStatus");
+                    boolean showOnlineStatus = showOnlineStatusObj == null || Boolean.TRUE.equals(showOnlineStatusObj);
+
+                    // Only add to online list if they are online AND allow showing status
+                    if ("ONLINE".equals(status) && showOnlineStatus) {
+                        User friend = new User();
+                        friend.setId(friendId);
+                        friend.setUsername((String) data.get("username"));
+                        friend.setDisplayName((String) data.get("displayName"));
+                        friend.setAvatarUrl((String) data.get("avatarUrl"));
+                        friend.setStatus(User.Status.ONLINE);
+                        friend.setShowOnlineStatus(showOnlineStatus);
+                        onlineFriends.add(friend);
+                    }
+                }
             }
+
+            sidebar.loadOnlineUsers(onlineFriends);
+            log.info("✅ Online friends loaded to sidebar: {} friends online", onlineFriends.size());
         } catch (Exception e) {
-            log.error("❌ Error loading online users", e);
-            appendMessage("❌ Lỗi khi tải danh sách người dùng online: " + e.getMessage());
+            log.error("❌ Error loading online friends", e);
+            appendMessage("❌ Lỗi khi tải danh sách bạn bè online: " + e.getMessage());
         }
     }
 
@@ -836,6 +863,9 @@ public class ChatClientFXApp extends Application {
                     friend.setAvatarUrl((String) data.get("avatarUrl"));
                     friend.setStatus(data.get("status") != null ? User.Status.valueOf(data.get("status").toString())
                             : User.Status.OFFLINE);
+                    // Set showOnlineStatus from backend data
+                    Object showOnlineStatusObj = data.get("showOnlineStatus");
+                    friend.setShowOnlineStatus(showOnlineStatusObj == null || Boolean.TRUE.equals(showOnlineStatusObj));
                     friends.add(friend);
                 }
                 sidebar.loadFriends(friends);
@@ -1115,21 +1145,50 @@ public class ChatClientFXApp extends Application {
     }
 
     /**
-     * Handle friend request notification
+     * Handle friend request notification - handles new requests, accepts, and
+     * removals
      */
     private void handleFriendRequestNotification(FriendRequestNotification notification) {
         if (notification == null)
             return;
 
-        log.info("Received friend request from: {}", notification.getSenderUsername());
+        String eventType = notification.getEventType();
+        log.info("👋 Friend notification received: eventType={}, from={}", eventType, notification.getSenderUsername());
 
-        // Show desktop notification
-        String displayName = notification.getDisplayName();
-        notificationService.showFriendRequestNotification(displayName);
-
-        // Update sidebar badge (if implemented)
         Platform.runLater(() -> {
-            sidebar.incrementFriendRequestBadge();
+            if ("REQUEST_SENT".equals(eventType)) {
+                // New friend request received
+                String displayName = notification.getDisplayName();
+                notificationService.showFriendRequestNotification(displayName);
+                sidebar.incrementFriendRequestBadge();
+                log.info("👋 New friend request notification shown for: {}", displayName);
+
+            } else if ("REQUEST_ACCEPTED".equals(eventType)) {
+                // Someone accepted our friend request - refresh friend list
+                log.info("✅ Friend request accepted - refreshing friend list");
+                loadFriends();
+                loadOnlineUsers();
+                // Show notification to user
+                String displayName = notification.getDisplayName();
+                appendMessage("✅ " + displayName + " đã chấp nhận lời mời kết bạn của bạn!");
+
+            } else if ("FRIEND_REMOVED".equals(eventType)) {
+                // Someone removed us as a friend - refresh friend list
+                log.info("❌ Friend removed - refreshing friend list");
+                loadFriends();
+                loadOnlineUsers();
+                // Optionally show notification
+                String displayName = notification.getDisplayName();
+                if (displayName != null && !displayName.isEmpty()) {
+                    log.info("❌ {} đã hủy kết bạn với bạn", displayName);
+                }
+
+            } else {
+                // Default handling for other/unknown event types
+                String displayName = notification.getDisplayName();
+                notificationService.showFriendRequestNotification(displayName);
+                sidebar.incrementFriendRequestBadge();
+            }
         });
     }
 
@@ -1287,22 +1346,25 @@ public class ChatClientFXApp extends Application {
         if (statusMessage == null)
             return;
 
+        // Skip status updates for current user - don't show yourself
+        if (statusMessage.getUserId() != null && statusMessage.getUserId().equals(currentUserId)) {
+            log.debug("👥 Ignoring status update for self");
+            return;
+        }
+
         boolean isOnline = "ONLINE".equals(statusMessage.getStatus())
                 || Boolean.TRUE.equals(statusMessage.getIsOnline());
         log.info("👥 User status update: {} (id={}) is now {}",
                 statusMessage.getUsername(), statusMessage.getUserId(), isOnline ? "ONLINE" : "OFFLINE");
 
         Platform.runLater(() -> {
-            // Update friend status in sidebar (this also updates Online Users list now)
+            // Update friend status in sidebar Direct Messages list
             sidebar.updateFriendStatus(statusMessage.getUserId(), isOnline);
 
-            // Also directly add/remove from Online Users list using displayName/username
-            // This handles users who are not in the friends list
-            if (isOnline) {
-                sidebar.addOnlineUser(statusMessage.getDisplayName(), statusMessage.getUsername());
-            } else {
-                sidebar.removeOnlineUser(statusMessage.getDisplayName(), statusMessage.getUsername());
-            }
+            // Reload online users and friends to get fresh showOnlineStatus from backend
+            // This ensures Online Now tab and DM list respect privacy settings correctly
+            loadOnlineUsers();
+            loadFriends();
         });
     }
 

@@ -31,7 +31,7 @@ public class FriendsManagementDialog extends Stage {
     private final ChatService chatService;
 
     // UI Components
-    private ListView<User> friendsList;
+    private ListView<Map<String, Object>> friendsList;
     private ListView<Map<String, Object>> pendingRequestsList;
     private TextField searchField;
     private ListView<User> searchResultsList;
@@ -293,15 +293,7 @@ public class FriendsManagementDialog extends Stage {
                     continue;
                 }
 
-                User user = new User();
-                user.setId(friendId);
-                user.setUsername((String) friend.get("username"));
-                user.setDisplayName((String) friend.get("displayName"));
-                user.setAvatarUrl((String) friend.get("avatarUrl"));
-                user.setStatus(friend.get("status") != null ? User.Status.valueOf(friend.get("status").toString())
-                        : User.Status.OFFLINE);
-
-                friendsList.getItems().add(user);
+                friendsList.getItems().add(friend);
             }
 
             // Cập nhật số lượng bạn bè
@@ -338,7 +330,7 @@ public class FriendsManagementDialog extends Stage {
 
                 // Also filter out users who are already friends
                 List<Long> friendIds = friendsList.getItems().stream()
-                        .map(User::getId)
+                        .map(f -> Long.valueOf(f.get("id").toString()))
                         .collect(java.util.stream.Collectors.toList());
                 int beforeFriendFilter = results.size();
                 results.removeIf(u -> friendIds.contains(u.getId()));
@@ -406,15 +398,24 @@ public class FriendsManagementDialog extends Stage {
         });
     }
 
-    // Custom cell for friends list with Message button
-    private class FriendListCell extends ListCell<User> {
+    // Custom cell for friends list with Message and Remove buttons
+    private class FriendListCell extends ListCell<Map<String, Object>> {
         @Override
-        protected void updateItem(User friend, boolean empty) {
+        protected void updateItem(Map<String, Object> friend, boolean empty) {
             super.updateItem(friend, empty);
             if (empty || friend == null) {
                 setText(null);
                 setGraphic(null);
             } else {
+                String displayName = (String) friend.get("displayName");
+                String username = (String) friend.get("username");
+                String status = friend.get("status") != null ? friend.get("status").toString() : "OFFLINE";
+                boolean isOnline = "ONLINE".equals(status);
+
+                // Check if friend has hidden their online status
+                Object showOnlineStatusObj = friend.get("showOnlineStatus");
+                boolean hideOnlineStatus = showOnlineStatusObj != null && showOnlineStatusObj.equals(Boolean.FALSE);
+
                 HBox friendBox = new HBox(12);
                 friendBox.setAlignment(Pos.CENTER_LEFT);
                 friendBox.setPadding(new Insets(12, 15, 12, 15));
@@ -423,12 +424,12 @@ public class FriendsManagementDialog extends Stage {
                 // Avatar with initial
                 StackPane avatarPane = new StackPane();
                 Circle avatar = new Circle(22);
-                int hash = Math.abs((friend.getUsername() != null ? friend.getUsername() : "").hashCode());
+                int hash = Math.abs((username != null ? username : "").hashCode());
                 avatar.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
                 avatar.setEffect(new DropShadow(4, Color.web("#00000020")));
 
-                String initial = friend.getDisplayName() != null && friend.getDisplayName().length() > 0
-                        ? friend.getDisplayName().substring(0, 1).toUpperCase()
+                String initial = displayName != null && displayName.length() > 0
+                        ? displayName.substring(0, 1).toUpperCase()
                         : "?";
                 Label initialLabel = new Label(initial);
                 initialLabel.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold;");
@@ -436,16 +437,25 @@ public class FriendsManagementDialog extends Stage {
 
                 // Info
                 VBox infoBox = new VBox(3);
-                Label nameLabel = new Label(
-                        friend.getDisplayName() != null ? friend.getDisplayName() : friend.getUsername());
+                Label nameLabel = new Label(displayName != null ? displayName : username);
                 nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: #212529;");
 
                 HBox statusBox = new HBox(5);
                 statusBox.setAlignment(Pos.CENTER_LEFT);
                 Circle statusDot = new Circle(4);
-                statusDot.setFill(
-                        friend.getStatus() == User.Status.ONLINE ? Color.web("#4ade80") : Color.web("#9ca3af"));
-                Label statusLabel = new Label(friend.getStatus() == User.Status.ONLINE ? "Online" : "Offline");
+                Label statusLabel;
+
+                if (hideOnlineStatus) {
+                    // Friend has hidden their status - show "Ẩn trạng thái"
+                    statusDot.setFill(Color.web("#9ca3af"));
+                    statusLabel = new Label("Ẩn trạng thái");
+                } else if (isOnline) {
+                    statusDot.setFill(Color.web("#4ade80"));
+                    statusLabel = new Label("Online");
+                } else {
+                    statusDot.setFill(Color.web("#9ca3af"));
+                    statusLabel = new Label("Offline");
+                }
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #6c757d;");
                 statusBox.getChildren().addAll(statusDot, statusLabel);
 
@@ -455,24 +465,42 @@ public class FriendsManagementDialog extends Stage {
                 HBox.setHgrow(spacer, Priority.ALWAYS);
 
                 // Message button
-                Button messageBtn = new Button("💬 Nhắn tin");
+                Button messageBtn = new Button("💬");
                 messageBtn.setStyle(
                         "-fx-background-color: #667eea; -fx-text-fill: white; " +
-                                "-fx-font-size: 11px; -fx-padding: 8 15; -fx-background-radius: 15; -fx-cursor: hand;");
+                                "-fx-font-size: 12px; -fx-padding: 8 12; -fx-background-radius: 15; -fx-cursor: hand;");
                 messageBtn.setOnMouseEntered(e -> messageBtn.setStyle(
                         "-fx-background-color: #5a67d8; -fx-text-fill: white; " +
-                                "-fx-font-size: 11px; -fx-padding: 8 15; -fx-background-radius: 15; -fx-cursor: hand;"));
+                                "-fx-font-size: 12px; -fx-padding: 8 12; -fx-background-radius: 15; -fx-cursor: hand;"));
                 messageBtn.setOnMouseExited(e -> messageBtn.setStyle(
                         "-fx-background-color: #667eea; -fx-text-fill: white; " +
-                                "-fx-font-size: 11px; -fx-padding: 8 15; -fx-background-radius: 15; -fx-cursor: hand;"));
+                                "-fx-font-size: 12px; -fx-padding: 8 12; -fx-background-radius: 15; -fx-cursor: hand;"));
                 messageBtn.setOnAction(e -> {
                     if (onMessageClicked != null) {
-                        onMessageClicked.accept(friend);
-                        close(); // Close dialog after starting chat
+                        User user = new User();
+                        user.setId(Long.valueOf(friend.get("id").toString()));
+                        user.setUsername(username);
+                        user.setDisplayName(displayName);
+                        user.setAvatarUrl((String) friend.get("avatarUrl"));
+                        onMessageClicked.accept(user);
+                        close();
                     }
                 });
 
-                friendBox.getChildren().addAll(avatarPane, infoBox, spacer, messageBtn);
+                // Remove friend button
+                Button removeBtn = new Button("🗑");
+                removeBtn.setStyle(
+                        "-fx-background-color: #ef4444; -fx-text-fill: white; " +
+                                "-fx-font-size: 12px; -fx-padding: 8 12; -fx-background-radius: 15; -fx-cursor: hand;");
+                removeBtn.setOnMouseEntered(e -> removeBtn.setStyle(
+                        "-fx-background-color: #dc2626; -fx-text-fill: white; " +
+                                "-fx-font-size: 12px; -fx-padding: 8 12; -fx-background-radius: 15; -fx-cursor: hand;"));
+                removeBtn.setOnMouseExited(e -> removeBtn.setStyle(
+                        "-fx-background-color: #ef4444; -fx-text-fill: white; " +
+                                "-fx-font-size: 12px; -fx-padding: 8 12; -fx-background-radius: 15; -fx-cursor: hand;"));
+                removeBtn.setOnAction(e -> handleRemoveFriend(friend));
+
+                friendBox.getChildren().addAll(avatarPane, infoBox, spacer, messageBtn, removeBtn);
 
                 // Hover effect for row
                 friendBox.setOnMouseEntered(e -> friendBox.setStyle(
@@ -484,6 +512,40 @@ public class FriendsManagementDialog extends Stage {
                 setText(null);
                 setStyle("-fx-background-color: transparent; -fx-padding: 3 0;");
             }
+        }
+
+        private void handleRemoveFriend(Map<String, Object> friend) {
+            String displayName = (String) friend.get("displayName");
+            String username = (String) friend.get("username");
+            String name = displayName != null ? displayName : username;
+
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Xác nhận xóa bạn");
+            confirm.setHeaderText(null);
+            confirm.setContentText("Bạn có chắc chắn muốn xóa " + name + " khỏi danh sách bạn bè?");
+
+            confirm.showAndWait().ifPresent(response -> {
+                if (response == ButtonType.OK) {
+                    try {
+                        Object friendshipIdObj = friend.get("friendshipId");
+                        if (friendshipIdObj != null) {
+                            Long friendshipId = Long.valueOf(friendshipIdObj.toString());
+                            boolean success = chatService.removeFriend(friendshipId);
+                            if (success) {
+                                showInfo("Thành công", "Đã xóa " + name + " khỏi danh sách bạn bè");
+                                loadFriends();
+                            } else {
+                                showError("Lỗi", "Không thể xóa bạn bè");
+                            }
+                        } else {
+                            showError("Lỗi", "Không tìm thấy thông tin để xóa bạn");
+                        }
+                    } catch (Exception ex) {
+                        log.error("Error removing friend", ex);
+                        showError("Lỗi", "Lỗi xử lý: " + ex.getMessage());
+                    }
+                }
+            });
         }
     }
 

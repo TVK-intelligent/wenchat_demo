@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.util.function.Consumer;
+import java.util.prefs.Preferences;
 
 /**
  * Settings Dialog - User preferences and account settings
@@ -42,6 +43,13 @@ public class SettingsDialog extends Stage {
     // Theme settings
     private static boolean isDarkTheme = false;
     private static Consumer<Boolean> themeChangeCallback;
+
+    // Local preferences for settings that backend may not support
+    private static final Preferences prefs = Preferences.userNodeForPackage(SettingsDialog.class);
+    private static final String PREF_SHOW_ONLINE_STATUS_PREFIX = "showOnlineStatus_user_";
+
+    // Current user ID for per-user preferences
+    private static Long currentLoggedInUserId = null;
 
     // Notification settings
     private CheckBox enableNotificationsCheckBox;
@@ -81,6 +89,18 @@ public class SettingsDialog extends Stage {
      */
     public static boolean isDarkTheme() {
         return isDarkTheme;
+    }
+
+    /**
+     * Get current showOnlineStatus preference (from local storage)
+     * This is used by Sidebar and other components to respect user's privacy
+     * setting
+     */
+    public static boolean isShowOnlineStatus() {
+        if (currentLoggedInUserId == null) {
+            return true; // Default to showing online status if no user is logged in
+        }
+        return prefs.getBoolean(PREF_SHOW_ONLINE_STATUS_PREFIX + currentLoggedInUserId, true);
     }
 
     private void initComponents() {
@@ -338,8 +358,18 @@ public class SettingsDialog extends Stage {
                 displayNameField.setText(currentUser.getDisplayName() != null ? currentUser.getDisplayName() : "");
                 avatarUrlField.setText(currentUser.getAvatarUrl() != null ? currentUser.getAvatarUrl() : "");
 
-                showOnlineStatusCheckBox.setSelected(
-                        currentUser.getShowOnlineStatus() != null ? currentUser.getShowOnlineStatus() : true);
+                // Set the current logged in user ID for per-user preferences
+                currentLoggedInUserId = currentUser.getId();
+
+                // Load showOnlineStatus: prefer backend value, fallback to local preference
+                Boolean backendValue = currentUser.getShowOnlineStatus();
+                String prefKey = PREF_SHOW_ONLINE_STATUS_PREFIX + currentUserId;
+                if (backendValue != null) {
+                    showOnlineStatusCheckBox.setSelected(backendValue);
+                } else {
+                    // Backend doesn't have this value, use local preference (default true)
+                    showOnlineStatusCheckBox.setSelected(prefs.getBoolean(prefKey, true));
+                }
 
                 // Load avatar preview
                 AvatarUtils.setAvatarOnCircleAsync(avatarPreviewCircle, currentUser.getAvatarUrl(),
@@ -407,7 +437,8 @@ public class SettingsDialog extends Stage {
         boolean success = chatService.updateUserProfile(
                 currentUser.getId(),
                 newDisplayName.isEmpty() ? null : newDisplayName,
-                currentUser.getAvatarUrl());
+                currentUser.getAvatarUrl(),
+                newShowOnlineStatus);
 
         if (success) {
             statusLabel.setText("✅ Cài đặt đã được lưu!");
@@ -422,6 +453,12 @@ public class SettingsDialog extends Stage {
 
             currentUser.setDisplayName(newDisplayName);
             currentUser.setShowOnlineStatus(newShowOnlineStatus);
+
+            // Also save to local preferences as fallback (per-user key)
+            String prefKey = PREF_SHOW_ONLINE_STATUS_PREFIX + currentUser.getId();
+            prefs.putBoolean(prefKey, newShowOnlineStatus);
+            log.info("💾 Saved showOnlineStatus={} to local preferences for user {}", newShowOnlineStatus,
+                    currentUser.getId());
 
             showSuccess("Thành công", "Đã lưu thay đổi thành công!");
         } else {

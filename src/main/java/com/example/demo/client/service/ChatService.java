@@ -253,6 +253,7 @@ public class ChatService {
                     if (!addedUserIds.contains(friendId)) {
                         java.util.Map<String, Object> friendData = new java.util.HashMap<>();
                         friendData.put("id", friendId);
+                        friendData.put("friendshipId", friendship.get("id")); // Add friendshipId for remove feature
                         friendData.put("username", friend.get("username"));
                         friendData.put("displayName", friend.get("displayName"));
                         friendData.put("avatarUrl", friend.get("avatarUrl"));
@@ -263,6 +264,8 @@ public class ChatService {
                             status = friend.get("status").toString();
                         }
                         friendData.put("status", status);
+                        // Copy showOnlineStatus for privacy setting
+                        friendData.put("showOnlineStatus", friend.get("showOnlineStatus"));
                         friends.add(friendData);
                         addedUserIds.add(friendId);
                     }
@@ -277,6 +280,7 @@ public class ChatService {
                     if (currentUser != null && !userId.equals(currentUser.getId()) && !addedUserIds.contains(userId)) {
                         java.util.Map<String, Object> friendData = new java.util.HashMap<>();
                         friendData.put("id", userId);
+                        friendData.put("friendshipId", friendship.get("id")); // Add friendshipId for remove feature
                         friendData.put("username", user.get("username"));
                         friendData.put("displayName", user.get("displayName"));
                         friendData.put("avatarUrl", user.get("avatarUrl"));
@@ -286,6 +290,8 @@ public class ChatService {
                             status = user.get("status").toString();
                         }
                         friendData.put("status", status);
+                        // Copy showOnlineStatus for privacy setting
+                        friendData.put("showOnlineStatus", user.get("showOnlineStatus"));
                         friends.add(friendData);
                         addedUserIds.add(userId);
                     }
@@ -464,6 +470,22 @@ public class ChatService {
 
         } catch (Exception e) {
             log.error("Failed to decline friend request: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 🗑️ Remove friend (delete friendship)
+     */
+    public boolean removeFriend(Long friendshipId) {
+        try {
+            String endpoint = String.format("/api/friends/%d", friendshipId);
+            delete(endpoint, true);
+            log.info("Friend removed successfully!");
+            return true;
+
+        } catch (Exception e) {
+            log.error("Failed to remove friend: " + e.getMessage());
             return false;
         }
     }
@@ -674,14 +696,21 @@ public class ChatService {
      * Backend uses @RequestParam so we need to send as form parameters, not JSON
      * body
      */
-    public boolean updateUserProfile(Long userId, String displayName, String avatarUrl) {
+    public boolean updateUserProfile(Long userId, String displayName, String avatarUrl, Boolean showOnlineStatus) {
         try {
-            log.info("🔄 Updating user profile - userId: {}, displayName: {}", userId, displayName);
+            log.info("🔄 Updating user profile - userId: {}, displayName: {}, showOnlineStatus: {}", userId,
+                    displayName, showOnlineStatus);
 
             // Build form data string for PUT request
             StringBuilder formData = new StringBuilder();
             if (displayName != null && !displayName.isEmpty()) {
                 formData.append("displayName=").append(java.net.URLEncoder.encode(displayName, "UTF-8"));
+            }
+            if (showOnlineStatus != null) {
+                if (formData.length() > 0) {
+                    formData.append("&");
+                }
+                formData.append("showOnlineStatus=").append(showOnlineStatus);
             }
 
             String endpoint = "/api/users/" + userId;
