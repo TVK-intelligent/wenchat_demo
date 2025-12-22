@@ -42,6 +42,7 @@ public class SettingsDialog extends Stage {
 
     // Theme settings
     private static boolean isDarkTheme = false;
+    private static Consumer<String> avatarChangeCallback;
     private static Consumer<Boolean> themeChangeCallback;
 
     // Local preferences for settings that backend may not support
@@ -82,6 +83,16 @@ public class SettingsDialog extends Stage {
      */
     public static void setThemeChangeCallback(Consumer<Boolean> callback) {
         themeChangeCallback = callback;
+    }
+
+    /**
+     * Set callback for avatar changes
+     * 
+     * @param callback Consumer that receives the new avatar URL when avatar is
+     *                 updated
+     */
+    public static void setAvatarChangeCallback(Consumer<String> callback) {
+        avatarChangeCallback = callback;
     }
 
     /**
@@ -496,6 +507,11 @@ public class SettingsDialog extends Stage {
                         // Refresh avatar preview
                         AvatarUtils.setAvatarOnCircleAsync(avatarPreviewCircle, updatedUser.getAvatarUrl(),
                                 updatedUser.getUsername(), 30);
+
+                        // Notify callback to update avatar in other places (e.g. sidebar)
+                        if (avatarChangeCallback != null) {
+                            avatarChangeCallback.accept(updatedUser.getAvatarUrl());
+                        }
 
                         showSuccess("Thành công", "Ảnh đại diện đã được cập nhật!");
                     }

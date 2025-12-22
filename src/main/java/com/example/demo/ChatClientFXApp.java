@@ -114,6 +114,13 @@ public class ChatClientFXApp extends Application {
             // Setup theme change callback
             SettingsDialog.setThemeChangeCallback(this::applyTheme);
 
+            // Setup avatar change callback to update sidebar avatar
+            SettingsDialog.setAvatarChangeCallback(newAvatarUrl -> {
+                if (sidebar != null && currentUsername != null) {
+                    Platform.runLater(() -> sidebar.setCurrentUserAvatar(newAvatarUrl, currentUsername));
+                }
+            });
+
             // Apply Atlantafx light theme
             Application.setUserAgentStylesheet(new PrimerLight().getUserAgentStylesheet());
 
@@ -1061,14 +1068,8 @@ public class ChatClientFXApp extends Application {
                                 selectedFile.getAbsolutePath());
 
                         if (fileUrl != null && !fileUrl.isEmpty()) {
-                            // Display file message locally (server saves to DB via REST API)
-                            contentArea.addFileMessage(
-                                    currentUsername,
-                                    selectedFile.getName(),
-                                    fileUrl,
-                                    java.time.LocalDateTime.now(),
-                                    true);
-
+                            // Success - message will appear via WebSocket callback from server broadcast
+                            // Don't add locally to avoid duplicate (server broadcasts file message)
                             appendMessage("✅ Đã gửi file: " + selectedFile.getName());
                             log.info("📎 Sent private file: {} to user {}", selectedFile.getName(),
                                     privateChatUser.getId());

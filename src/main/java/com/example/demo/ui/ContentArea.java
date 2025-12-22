@@ -836,23 +836,34 @@ public class ContentArea extends BorderPane {
         downloadBtn.setOnAction(e -> downloadFile(fileName, fileUrl, downloadBtn, sizeLabel));
 
         // Context Menu for recall (Files)
+        System.out.println("📩 ContentArea.addFileMessage: messageId=" + messageId + ", isMine=" + isMine);
         if (isMine && messageId != null) {
             long minutesElapsed = ChronoUnit.MINUTES.between(timestamp, LocalDateTime.now());
+            System.out.println("⏱️ File message " + messageId + " - minutes elapsed: " + minutesElapsed);
             if (minutesElapsed < 2) {
                 ContextMenu contextMenu = new ContextMenu();
                 MenuItem recallItem = new MenuItem("Thu hồi");
                 recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
+                final Long finalMessageId = messageId;
                 recallItem.setOnAction(e -> {
                     if (chatService != null) {
-                        boolean success = chatService.recallMessage(messageId);
-                        if (!success) {
+                        boolean success = chatService.recallMessage(finalMessageId);
+                        if (success) {
+                            // Cập nhật UI ngay lập tức - không đợi WebSocket
+                            updateMessageAsRecalled(finalMessageId);
+                        } else {
                             showAlert(Alert.AlertType.ERROR, "Lỗi", "Không thể thu hồi tệp tin.");
                         }
                     }
                 });
                 contextMenu.getItems().add(recallItem);
                 fileCard.setOnContextMenuRequested(e -> contextMenu.show(fileCard, e.getScreenX(), e.getScreenY()));
+                System.out.println("✅ Added recall context menu for file message " + messageId);
+            } else {
+                System.out.println("⚠️ File message " + messageId + " is older than 2 minutes");
             }
+        } else if (isMine && messageId == null) {
+            System.out.println("⚠️ File message has NULL ID - cannot add recall menu!");
         }
 
         fileCard.getChildren().addAll(fileIconPane, fileInfo, downloadBtn);
