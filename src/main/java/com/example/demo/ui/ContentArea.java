@@ -668,6 +668,13 @@ public class ContentArea extends BorderPane {
                 addMessage(msg.getId(), displayName, msg.getContent(), msg.getTimestamp(), isMine, false);
             }
         }
+
+        // 📜 Scroll to bottom after loading all messages
+        if (!messages.isEmpty()) {
+            Platform.runLater(() -> {
+                messageListView.scrollTo(messageListView.getItems().size() - 1);
+            });
+        }
     }
 
     // Legacy method support

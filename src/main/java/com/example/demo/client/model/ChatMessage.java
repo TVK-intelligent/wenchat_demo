@@ -27,6 +27,7 @@ public class ChatMessage {
     private LocalDateTime timestamp;
     private boolean recalled;
     private Long recipientId;
+    private boolean read; // Track if message is read by current user
 
     public enum MessageType {
         TEXT, IMAGE, FILE, TYPING, NOTIFICATION, SYSTEM

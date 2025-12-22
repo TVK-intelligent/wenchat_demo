@@ -337,6 +337,15 @@ public class ChatClientFXApp extends Application {
             return;
         }
         try {
+            // 📨 Clear unread badge for this friend (UI) and mark as read on backend
+            sidebar.clearUnreadCount(friend.getId());
+
+            // Mark all private messages from this friend as read on backend
+            // This ensures the unread count is reset on the server side
+            new Thread(() -> {
+                chatService.markAllPrivateMessagesAsRead(friend.getId());
+            }).start();
+
             // Switch ContentArea to private chat mode
             contentArea.switchToPrivateChatMode(friend);
 
@@ -947,6 +956,16 @@ public class ChatClientFXApp extends Application {
                         .orElse(null);
 
                 if (targetRoom != null) {
+                    // 📨 Clear unread badge for this room (UI) and mark as read on backend
+                    sidebar.clearRoomUnreadCount(targetRoom.getId());
+
+                    // Mark all messages in this room as read on backend
+                    // This ensures unread count is reset on server side
+                    final Long roomIdToMark = targetRoom.getId();
+                    new Thread(() -> {
+                        chatService.markAllMessagesInRoomAsRead(roomIdToMark);
+                    }).start();
+
                     // Fetch message history for the room
                     List<ChatMessage> messages = chatService.getRoomMessages(targetRoom.getId());
                     roomMessages.put(targetRoom.getId(), messages);
@@ -1140,9 +1159,19 @@ public class ChatClientFXApp extends Application {
             if (message.getSenderId() != null && !message.getSenderId().equals(currentUserId)) {
                 boolean isCurrentRoom = message.getRoomId().equals(currentRoomId);
                 boolean isFocused = notificationService.isWindowFocused();
+                boolean isInPrivateMode = contentArea.isPrivateMode();
 
-                // Skip notification only when focused AND it's the current room
-                if (isCurrentRoom && isFocused) {
+                // 📨 Increment room unread count if NOT viewing this room
+                // (only when NOT in private chat mode)
+                if (!isCurrentRoom || isInPrivateMode) {
+                    Platform.runLater(() -> {
+                        sidebar.incrementRoomUnreadCount(message.getRoomId());
+                    });
+                }
+
+                // Skip notification only when focused AND it's the current room AND not in
+                // private mode
+                if (isCurrentRoom && isFocused && !isInPrivateMode) {
                     // User is already looking at this room, no need to notify
                     return;
                 }
@@ -1270,8 +1299,67 @@ public class ChatClientFXApp extends Application {
                 log.info("📊 Set badge counts - Friends: {}, Room invites: {} (calling sidebar update)",
                         friendRequestCount, roomInviteCount);
             });
+
+            // 📨 Load unread message counts for friends
+            loadUnreadMessageCounts();
+
         } catch (Exception e) {
             log.error("Failed to load initial badge counts: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Load unread message counts for all friends and rooms, update sidebar badges
+     */
+    private void loadUnreadMessageCounts() {
+        try {
+            // Load friend unread counts
+            List<java.util.Map<String, Object>> friendsData = chatService.getFriends();
+            if (friendsData != null && !friendsData.isEmpty()) {
+                for (java.util.Map<String, Object> data : friendsData) {
+                    Long friendId = Long.valueOf(data.get("id").toString());
+                    // Skip current user
+                    if (currentUserId != null && friendId.equals(currentUserId)) {
+                        continue;
+                    }
+
+                    // Get unread count from backend
+                    int unreadCount = chatService.getUnreadPrivateMessageCount(friendId);
+                    if (unreadCount > 0) {
+                        final Long fId = friendId;
+                        final int count = unreadCount;
+                        Platform.runLater(() -> {
+                            sidebar.setUnreadCount(fId, count);
+                        });
+                        log.debug("📨 Friend {} has {} unread messages", friendId, unreadCount);
+                    }
+                }
+                Platform.runLater(() -> {
+                    sidebar.refreshUnreadBadges();
+                });
+                log.info("📨 Loaded unread message counts for {} friends", friendsData.size());
+            }
+
+            // Load room unread counts
+            if (loadedRooms != null && !loadedRooms.isEmpty()) {
+                for (ChatRoom room : loadedRooms) {
+                    int roomUnreadCount = chatService.getUnreadMessageCount(room.getId());
+                    if (roomUnreadCount > 0) {
+                        final Long roomId = room.getId();
+                        final int count = roomUnreadCount;
+                        Platform.runLater(() -> {
+                            sidebar.setRoomUnreadCount(roomId, count);
+                        });
+                        log.debug("🏠 Room {} has {} unread messages", room.getName(), roomUnreadCount);
+                    }
+                }
+                Platform.runLater(() -> {
+                    sidebar.refreshRoomsList();
+                });
+                log.info("🏠 Loaded unread message counts for {} rooms", loadedRooms.size());
+            }
+        } catch (Exception e) {
+            log.error("Failed to load unread message counts: " + e.getMessage());
         }
     }
 
@@ -1416,17 +1504,20 @@ public class ChatClientFXApp extends Application {
         boolean isViewingThisChat = isInPrivateMode
                 && privateChatUser.getId().equals(message.getSenderId());
 
-        // Show notification if not viewing this chat or window not focused
+        // Only increment unread if NOT viewing this chat
+        // (if viewing, user already sees the message - no need to count)
+        if (!isViewingThisChat) {
+            Platform.runLater(() -> {
+                sidebar.incrementUnreadCount(message.getSenderId());
+            });
+        }
+
+        // Show notification if not viewing this chat OR window not focused
         if (!isViewingThisChat || !notificationService.isWindowFocused()) {
             String displayName = message.getSenderDisplayName() != null
                     ? message.getSenderDisplayName()
                     : message.getSenderUsername();
             notificationService.showMessageNotification(displayName, message.getContent());
-
-            // Update unread badge for this friend in sidebar
-            Platform.runLater(() -> {
-                sidebar.incrementUnreadCount(message.getSenderId());
-            });
         }
     }
 

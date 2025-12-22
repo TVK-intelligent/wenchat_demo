@@ -867,6 +867,106 @@ public class ChatService {
         }
     }
 
+    // ==================== MESSAGE READ STATUS API ====================
+
+    /**
+     * ✅ Mark a single message as read
+     * 
+     * @param messageId ID of the message to mark as read
+     * @return true if successful
+     */
+    public boolean markMessageAsRead(Long messageId) {
+        try {
+            put("/api/messages/" + messageId + "/mark-as-read", "{}", true);
+            log.debug("📨 Message {} marked as read", messageId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to mark message as read: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * ✅ Mark all messages in a room as read
+     * 
+     * @param roomId ID of the room
+     * @return true if successful
+     */
+    public boolean markAllMessagesInRoomAsRead(Long roomId) {
+        try {
+            put("/api/messages/room/" + roomId + "/mark-all-as-read", "{}", true);
+            log.info("📨 All messages in room {} marked as read", roomId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to mark all messages as read: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 📊 Get unread message count for a room
+     * 
+     * @param roomId ID of the room
+     * @return Number of unread messages, 0 if error
+     */
+    public int getUnreadMessageCount(Long roomId) {
+        try {
+            String response = get("/api/messages/room/" + roomId + "/unread-count", true);
+            return Integer.parseInt(response.trim());
+        } catch (Exception e) {
+            log.error("Failed to get unread count for room {}: {}", roomId, e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * 📊 Get unread message count for private chat with a friend
+     * 
+     * @param friendId ID of the friend
+     * @return Number of unread messages from this friend, 0 if error
+     */
+    public int getUnreadPrivateMessageCount(Long friendId) {
+        try {
+            String response = get("/api/messages/private/" + friendId + "/unread-count", true);
+            return Integer.parseInt(response.trim());
+        } catch (Exception e) {
+            log.error("Failed to get unread private count for friend {}: {}", friendId, e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * ✅ Mark all private messages from a friend as read
+     * 
+     * @param friendId ID of the friend
+     * @return true if successful
+     */
+    public boolean markAllPrivateMessagesAsRead(Long friendId) {
+        try {
+            put("/api/messages/private/" + friendId + "/mark-all-as-read", "{}", true);
+            log.info("📨 All private messages from friend {} marked as read", friendId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to mark private messages as read: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 📊 Get total unread message count (all rooms + private chats)
+     * 
+     * @return Total number of unread messages
+     */
+    public int getTotalUnreadMessageCount() {
+        try {
+            String response = get("/api/messages/total-unread-count", true);
+            return Integer.parseInt(response.trim());
+        } catch (Exception e) {
+            log.error("Failed to get total unread count: {}", e.getMessage());
+            return 0;
+        }
+    }
+
     /**
      * 🌐 Generic PUT request
      */

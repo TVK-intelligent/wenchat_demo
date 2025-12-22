@@ -26,6 +26,7 @@ public class Sidebar extends VBox {
 
     private ListView<String> userListView;
     private ListView<String> friendsListView;
+    private ListView<String> roomsListView; // Chat rooms list with unread badges
     private ComboBox<String> roomSelector;
     private Button settingsButton;
     private Button profileButton;
@@ -37,6 +38,7 @@ public class Sidebar extends VBox {
     private Circle userAvatar;
     private Label onlineCountLabel;
     private Label friendsCountLabel;
+    private Label roomsCountLabel; // Rooms count label
     private TabPane sidebarTabs;
     private ListView<String> publicRoomsListView; // Public rooms list
 
@@ -53,6 +55,8 @@ public class Sidebar extends VBox {
 
     // Store friends for direct access
     private List<com.example.demo.client.model.User> loadedFriends;
+    // Store rooms for direct access
+    private List<com.example.demo.client.model.ChatRoom> loadedRooms;
 
     // Avatar colors
     private static final Color[] AVATAR_COLORS = {
@@ -62,7 +66,8 @@ public class Sidebar extends VBox {
     };
 
     // Unread badge tracking
-    private final Map<Long, Integer> unreadCounts = new HashMap<>();
+    private final Map<Long, Integer> unreadCounts = new HashMap<>(); // For DMs (friendId -> count)
+    private final Map<Long, Integer> roomUnreadCounts = new HashMap<>(); // For Rooms (roomId -> count)
     private int friendRequestBadgeCount = 0;
     private int roomInviteBadgeCount = 0;
     private Label dmBadgeLabel;
@@ -320,11 +325,11 @@ public class Sidebar extends VBox {
     }
 
     private VBox createRoomsTab() {
-        VBox roomsBox = new VBox(12);
+        VBox roomsBox = new VBox(10);
         roomsBox.setPadding(new Insets(12, 8, 8, 8));
         roomsBox.setStyle("-fx-background-color: rgba(0,0,0,0.1); -fx-background-radius: 12;");
 
-        // Header
+        // Header with icon and count
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
         header.setPadding(new Insets(8, 12, 8, 12));
@@ -337,20 +342,30 @@ public class Sidebar extends VBox {
         Label roomLabel = new Label("Chat Rooms");
         roomLabel.setStyle("-fx-text-fill: white; -fx-font-size: 14px; -fx-font-weight: bold;");
 
-        header.getChildren().addAll(iconLabel, roomLabel);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
 
+        roomsCountLabel = new Label("✨ 0");
+        roomsCountLabel.setStyle(
+                "-fx-background-color: #FFD93D; -fx-text-fill: #333; " +
+                        "-fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 4 10 4 10; -fx-background-radius: 15;");
+
+        header.getChildren().addAll(iconLabel, roomLabel, spacer, roomsCountLabel);
+
+        // Rooms list with unread badges
+        roomsListView = new ListView<>();
+        roomsListView.setStyle(
+                "-fx-background-color: rgba(255,255,255,0.95); " +
+                        "-fx-background-radius: 12; -fx-border-radius: 12; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 8, 0, 0, 3);");
+        roomsListView.setCellFactory(param -> new RoomListCell());
+        roomsListView.setPlaceholder(new Label("🏠 Chưa có phòng chat nào."));
+        VBox.setVgrow(roomsListView, Priority.ALWAYS);
+
+        // Keep the old ComboBox for compatibility (hidden)
         roomSelector = new ComboBox<>();
-        roomSelector.setStyle(
-                "-fx-background-color: white; -fx-font-size: 13px; -fx-font-weight: bold; " +
-                        "-fx-background-radius: 10; -fx-border-radius: 10; " +
-                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 5, 0, 0, 2);");
-        roomSelector.setMaxWidth(Double.MAX_VALUE);
-        roomSelector.setPrefHeight(45);
-        roomSelector.setOnAction(e -> {
-            if (onRoomSelected != null) {
-                onRoomSelected.accept(roomSelector.getValue());
-            }
-        });
+        roomSelector.setVisible(false);
+        roomSelector.setManaged(false);
 
         // More room actions with colored buttons
         HBox roomActions = new HBox(10);
@@ -370,7 +385,7 @@ public class Sidebar extends VBox {
 
         roomActions.getChildren().addAll(invitesButton, historyButton);
 
-        roomsBox.getChildren().addAll(header, roomSelector, roomActions);
+        roomsBox.getChildren().addAll(header, roomsListView, roomActions);
         return roomsBox;
     }
 
@@ -594,13 +609,22 @@ public class Sidebar extends VBox {
      * Load rooms from ChatRoom objects
      */
     public void loadRoomsFromChatRooms(List<com.example.demo.client.model.ChatRoom> rooms) {
+        this.loadedRooms = rooms;
         roomSelector.getItems().clear();
+        roomsListView.getItems().clear();
+
         if (rooms != null && !rooms.isEmpty()) {
             for (com.example.demo.client.model.ChatRoom room : rooms) {
                 String displayName = room.isPrivate() ? "🔒 " + room.getName() : "🌐 " + room.getName();
                 roomSelector.getItems().add(displayName);
+                // Store as "roomId|roomName|isPrivate" format for ListView
+                String item = room.getId() + "|" + room.getName() + "|" + room.isPrivate();
+                roomsListView.getItems().add(item);
             }
             roomSelector.setValue(roomSelector.getItems().get(0));
+            roomsCountLabel.setText(String.valueOf(rooms.size()));
+        } else {
+            roomsCountLabel.setText("0");
         }
     }
 
@@ -922,6 +946,86 @@ public class Sidebar extends VBox {
         }
     }
 
+    /**
+     * 📊 Set unread count for a specific friend
+     * Called by ChatClientFXApp when loading from backend
+     */
+    public void setUnreadCount(Long friendId, int count) {
+        if (count > 0) {
+            unreadCounts.put(friendId, count);
+        } else {
+            unreadCounts.remove(friendId);
+        }
+        // Refresh the DM list to show/hide badges
+        if (friendsListView != null) {
+            friendsListView.refresh();
+        }
+        updateDMBadge();
+    }
+
+    /**
+     * 📊 Refresh all unread badges (call after loading from backend)
+     */
+    public void refreshUnreadBadges() {
+        if (friendsListView != null) {
+            friendsListView.refresh();
+        }
+        updateDMBadge();
+    }
+
+    // ==================== ROOM UNREAD COUNT METHODS ====================
+
+    /**
+     * 📊 Set unread count for a specific room
+     */
+    public void setRoomUnreadCount(Long roomId, int count) {
+        if (count > 0) {
+            roomUnreadCounts.put(roomId, count);
+        } else {
+            roomUnreadCounts.remove(roomId);
+        }
+        refreshRoomsList();
+    }
+
+    /**
+     * 📊 Increment unread count for a room
+     */
+    public void incrementRoomUnreadCount(Long roomId) {
+        roomUnreadCounts.merge(roomId, 1, Integer::sum);
+        refreshRoomsList();
+    }
+
+    /**
+     * 📊 Clear unread count for a room (when entering the room)
+     */
+    public void clearRoomUnreadCount(Long roomId) {
+        roomUnreadCounts.remove(roomId);
+        refreshRoomsList();
+    }
+
+    /**
+     * 📊 Get unread count for a room
+     */
+    public int getRoomUnreadCount(Long roomId) {
+        return roomUnreadCounts.getOrDefault(roomId, 0);
+    }
+
+    /**
+     * 📊 Get total unread count across all rooms
+     */
+    public int getTotalRoomUnreadCount() {
+        return roomUnreadCounts.values().stream().mapToInt(Integer::intValue).sum();
+    }
+
+    /**
+     * 📊 Refresh the rooms list view to show updated badges
+     */
+    public void refreshRoomsList() {
+        if (roomsListView != null) {
+            roomsListView.refresh();
+        }
+    }
+
     private void updateFriendsBadge() {
         // Update visual badge overlay on friends icon
         if (friendsBadgeLabel != null) {
@@ -1034,7 +1138,41 @@ public class Sidebar extends VBox {
                 }
                 statusBox.getChildren().add(statusIndicator);
 
+                // 🔴 Unread message badge
+                Label unreadBadge = null;
+                Long friendId = null;
+                if (loadedFriends != null) {
+                    for (com.example.demo.client.model.User friend : loadedFriends) {
+                        String displayName = friend.getDisplayName() != null ? friend.getDisplayName()
+                                : friend.getUsername();
+                        if (displayName.equals(friendName)) {
+                            friendId = friend.getId();
+                            break;
+                        }
+                    }
+                }
+
+                if (friendId != null) {
+                    int unreadCount = unreadCounts.getOrDefault(friendId, 0);
+                    if (unreadCount > 0) {
+                        String badgeText = unreadCount > 99 ? "99+" : String.valueOf(unreadCount);
+                        unreadBadge = new Label(badgeText);
+                        unreadBadge.setStyle(
+                                "-fx-background-color: #ef4444; " +
+                                        "-fx-text-fill: white; " +
+                                        "-fx-font-size: 11px; " +
+                                        "-fx-font-weight: bold; " +
+                                        "-fx-padding: 2 6 2 6; " +
+                                        "-fx-background-radius: 10; " +
+                                        "-fx-min-width: 20; " +
+                                        "-fx-alignment: center;");
+                    }
+                }
+
                 friendBox.getChildren().addAll(avatarPane, infoBox, statusBox);
+                if (unreadBadge != null) {
+                    friendBox.getChildren().add(unreadBadge);
+                }
 
                 // Hover effect with elevation
                 friendBox.setOnMouseEntered(e -> friendBox.setStyle(
@@ -1060,6 +1198,101 @@ public class Sidebar extends VBox {
                 });
 
                 setGraphic(friendBox);
+                setText(null);
+                setStyle("-fx-background-color: transparent; -fx-padding: 3 0 3 0;");
+            }
+        }
+    }
+
+    /**
+     * Cell for Chat Rooms list with unread badges
+     */
+    private class RoomListCell extends ListCell<String> {
+        @Override
+        protected void updateItem(String item, boolean empty) {
+            super.updateItem(item, empty);
+            if (empty || item == null) {
+                setGraphic(null);
+                setText(null);
+            } else {
+                // Parse item: "roomId|roomName|isPrivate"
+                String[] parts = item.split("\\|");
+                Long roomId = Long.valueOf(parts[0]);
+                String roomName = parts.length > 1 ? parts[1] : "Unknown";
+                boolean isPrivate = parts.length > 2 && Boolean.parseBoolean(parts[2]);
+
+                HBox roomBox = new HBox(14);
+                roomBox.setAlignment(Pos.CENTER_LEFT);
+                roomBox.setPadding(new Insets(14, 16, 14, 16));
+                roomBox.setStyle(
+                        "-fx-background-color: white; -fx-background-radius: 14; -fx-cursor: hand; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 8, 0, 0, 3);");
+
+                // Room icon/avatar
+                StackPane avatarPane = new StackPane();
+                Circle avatar = new Circle(22);
+                int hash = Math.abs(roomName.hashCode());
+                avatar.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
+                avatar.setEffect(new DropShadow(6, Color.web("#00000030")));
+
+                String icon = isPrivate ? "🔒" : "🌐";
+                Label iconLabel = new Label(icon);
+                iconLabel.setStyle("-fx-font-size: 14px;");
+
+                avatarPane.getChildren().addAll(avatar, iconLabel);
+
+                // Room info
+                VBox infoBox = new VBox(4);
+                Label nameLabel = new Label(icon + " " + roomName);
+                nameLabel.setStyle("-fx-text-fill: #333; -fx-font-size: 14px; -fx-font-weight: bold;");
+
+                String typeText = isPrivate ? "🔐 Phòng riêng tư" : "🌍 Phòng công khai";
+                Label typeLabel = new Label(typeText);
+                typeLabel.setStyle("-fx-text-fill: #888; -fx-font-size: 12px;");
+
+                infoBox.getChildren().addAll(nameLabel, typeLabel);
+                HBox.setHgrow(infoBox, Priority.ALWAYS);
+
+                // Unread message badge
+                Label unreadBadge = null;
+                int unreadCount = roomUnreadCounts.getOrDefault(roomId, 0);
+                if (unreadCount > 0) {
+                    String badgeText = unreadCount > 99 ? "99+" : String.valueOf(unreadCount);
+                    unreadBadge = new Label(badgeText);
+                    unreadBadge.setStyle(
+                            "-fx-background-color: #ef4444; " +
+                                    "-fx-text-fill: white; " +
+                                    "-fx-font-size: 11px; " +
+                                    "-fx-font-weight: bold; " +
+                                    "-fx-padding: 2 6 2 6; " +
+                                    "-fx-background-radius: 10; " +
+                                    "-fx-min-width: 20; " +
+                                    "-fx-alignment: center;");
+                }
+
+                roomBox.getChildren().addAll(avatarPane, infoBox);
+                if (unreadBadge != null) {
+                    roomBox.getChildren().add(unreadBadge);
+                }
+
+                // Hover effect
+                roomBox.setOnMouseEntered(e -> roomBox.setStyle(
+                        "-fx-background-color: #fff0f5; -fx-background-radius: 14; -fx-cursor: hand; " +
+                                "-fx-scale-x: 1.02; -fx-scale-y: 1.02; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(240,147,251,0.35), 15, 0, 0, 5);"));
+                roomBox.setOnMouseExited(e -> roomBox.setStyle(
+                        "-fx-background-color: white; -fx-background-radius: 14; -fx-cursor: hand; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 8, 0, 0, 3);"));
+
+                // Click to select room
+                roomBox.setOnMouseClicked(e -> {
+                    if (onRoomSelected != null) {
+                        String displayName = isPrivate ? "🔒 " + roomName : "🌐 " + roomName;
+                        onRoomSelected.accept(displayName);
+                    }
+                });
+
+                setGraphic(roomBox);
                 setText(null);
                 setStyle("-fx-background-color: transparent; -fx-padding: 3 0 3 0;");
             }
