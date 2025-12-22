@@ -50,7 +50,18 @@ public class AvatarUtils {
 
             // Prepend base URL if the avatar URL is relative
             if (!avatarUrl.startsWith("http://") && !avatarUrl.startsWith("https://")) {
+                // Check if baseUrl is valid
+                if (baseUrl == null || baseUrl.trim().isEmpty()) {
+                    log.warn("⚠️ baseUrl is null or empty, cannot load avatar: {}", avatarUrl);
+                    return null;
+                }
                 fullUrl = baseUrl + (avatarUrl.startsWith("/") ? "" : "/") + avatarUrl;
+            }
+
+            // Final validation
+            if (fullUrl == null || fullUrl.trim().isEmpty()) {
+                log.warn("⚠️ Full avatar URL is null or empty after processing");
+                return null;
             }
 
             log.debug("📷 Loading avatar from: {}", fullUrl);
@@ -122,9 +133,20 @@ public class AvatarUtils {
                 // Build full URL - needs to be effectively final for lambda
                 final String fullUrl;
                 if (!avatarUrl.startsWith("http://") && !avatarUrl.startsWith("https://")) {
+                    // Check if baseUrl is valid
+                    if (baseUrl == null || baseUrl.trim().isEmpty()) {
+                        log.warn("⚠️ baseUrl is null or empty, cannot load avatar: {}", avatarUrl);
+                        return;
+                    }
                     fullUrl = baseUrl + (avatarUrl.startsWith("/") ? "" : "/") + avatarUrl;
                 } else {
                     fullUrl = avatarUrl;
+                }
+
+                // Final validation - ensure URL is not empty or just whitespace
+                if (fullUrl == null || fullUrl.trim().isEmpty()) {
+                    log.warn("⚠️ Full avatar URL is null or empty after processing");
+                    return;
                 }
 
                 log.info("📷 Loading avatar async from: {}", fullUrl);

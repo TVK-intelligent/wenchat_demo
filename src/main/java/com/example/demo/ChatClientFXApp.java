@@ -209,6 +209,13 @@ public class ChatClientFXApp extends Application {
         sidebar.setOnJoinPublicRoom(roomId -> {
             boolean success = chatService.joinRoom(roomId);
             if (success) {
+                // Immediately subscribe to the new room for notifications
+                if (webSocketClient != null && webSocketClient.isConnected()) {
+                    webSocketClient.subscribeToRoom(roomId, this::handleIncomingMessage);
+                    webSocketClient.subscribeToRoomRecall(roomId, this::handleMessageRecall);
+                    log.info("✅ Subscribed to newly joined room: {}", roomId);
+                }
+
                 Platform.runLater(() -> {
                     Alert alert = new Alert(Alert.AlertType.INFORMATION);
                     alert.setTitle("Thành công");
@@ -642,6 +649,7 @@ public class ChatClientFXApp extends Application {
                     webSocketClient.subscribeToPrivateMessages(this::handlePrivateMessageNotification);
                     webSocketClient.subscribeToUserStatus(this::handleUserStatusUpdate);
                     webSocketClient.subscribeToMessageRecall(this::handleMessageRecall);
+                    webSocketClient.subscribeToRoomEvents(this::handleRoomEvent);
 
                     // Update UI status
                     contentArea.setOnlineStatus(true);
@@ -767,21 +775,25 @@ public class ChatClientFXApp extends Application {
                 // Load rooms into content area
                 contentArea.loadRoomsFromChatRooms(loadedRooms);
 
-                // Load messages for first room and subscribe
+                // Subscribe to ALL rooms for notifications
                 if (webSocketClient != null && webSocketClient.isConnected()) {
+                    for (ChatRoom room : loadedRooms) {
+                        // Subscribe to each room for messages
+                        webSocketClient.subscribeToRoom(room.getId(), this::handleIncomingMessage);
+                        // Subscribe to room recall notifications
+                        webSocketClient.subscribeToRoomRecall(room.getId(), this::handleMessageRecall);
+                        log.info("✅ Subscribed to room for notifications: {} (ID: {})", room.getName(), room.getId());
+                    }
+
+                    // Set first room as current and load its messages
                     ChatRoom firstRoom = loadedRooms.get(0);
                     currentRoomId = firstRoom.getId();
 
-                    // Load message history
+                    // Load message history for first room
                     List<ChatMessage> messages = chatService.getRoomMessages(currentRoomId);
                     roomMessages.put(currentRoomId, messages);
                     contentArea.clearMessages();
-                    contentArea.addMessages(messages, currentUsername); // Updated to pass currentUsername
-
-                    // Subscribe to room
-                    webSocketClient.subscribeToRoom(currentRoomId, this::handleIncomingMessage);
-                    // Subscribe to room recall notifications for real-time recall updates
-                    webSocketClient.subscribeToRoomRecall(currentRoomId, this::handleMessageRecall);
+                    contentArea.addMessages(messages, currentUsername);
                     appendMessage("✅ Đã tham gia phòng: " + firstRoom.getName());
                 }
             } else {
@@ -941,25 +953,15 @@ public class ChatClientFXApp extends Application {
 
                     // Clear current messages and display room messages
                     contentArea.clearMessages();
-                    contentArea.addMessages(messages, currentUsername); // Updated to pass currentUsername
+                    contentArea.addMessages(messages, currentUsername);
 
-                    // Unsubscribe from current room
-                    if (webSocketClient != null && currentRoomId != null && !currentRoomId.equals(targetRoom.getId())) {
-                        webSocketClient.unsubscribeFromRoom(currentRoomId);
-                        webSocketClient.unsubscribeFromRoomRecall(currentRoomId);
-                    }
+                    // Update current room ID (no need to unsubscribe/subscribe - already subscribed
+                    // to all rooms)
+                    currentRoomId = targetRoom.getId();
+                    appendMessage("✅ Đã chuyển sang phòng: " + targetRoom.getName());
 
-                    // Subscribe to new room
-                    if (webSocketClient != null && webSocketClient.isConnected()) {
-                        webSocketClient.subscribeToRoom(targetRoom.getId(), this::handleIncomingMessage);
-                        // Subscribe to room recall notifications for real-time recall updates
-                        webSocketClient.subscribeToRoomRecall(targetRoom.getId(), this::handleMessageRecall);
-                        currentRoomId = targetRoom.getId();
-                        appendMessage("✅ Đã chuyển sang phòng: " + targetRoom.getName());
-
-                        // Update content area room selector
-                        contentArea.getRoomSelector().setValue(roomName);
-                    }
+                    // Update content area room selector
+                    contentArea.getRoomSelector().setValue(roomName);
                 } else {
                     appendMessage("❌ Không tìm thấy phòng: " + roomName);
                 }
@@ -1131,15 +1133,36 @@ public class ChatClientFXApp extends Application {
                 });
             }
 
-            // Show notification for messages from others (not from current room or window
-            // not focused)
+            // Show notification for messages from others
+            // - Skip if focused AND viewing the message's room (already seeing it)
+            // - Show for other rooms (in-app toast if focused, desktop if not)
+            // - Show for current room if not focused (desktop notification)
             if (message.getSenderId() != null && !message.getSenderId().equals(currentUserId)) {
-                if (!message.getRoomId().equals(currentRoomId) || !notificationService.isWindowFocused()) {
-                    String displayName = message.getSenderDisplayName() != null
-                            ? message.getSenderDisplayName()
-                            : message.getSenderUsername();
-                    notificationService.showMessageNotification(displayName, message.getContent());
+                boolean isCurrentRoom = message.getRoomId().equals(currentRoomId);
+                boolean isFocused = notificationService.isWindowFocused();
+
+                // Skip notification only when focused AND it's the current room
+                if (isCurrentRoom && isFocused) {
+                    // User is already looking at this room, no need to notify
+                    return;
                 }
+
+                String displayName = message.getSenderDisplayName() != null
+                        ? message.getSenderDisplayName()
+                        : message.getSenderUsername();
+
+                // Include room name in notification if from different room
+                String notificationTitle = displayName;
+                if (!isCurrentRoom && loadedRooms != null) {
+                    ChatRoom sourceRoom = loadedRooms.stream()
+                            .filter(r -> r.getId().equals(message.getRoomId()))
+                            .findFirst()
+                            .orElse(null);
+                    if (sourceRoom != null) {
+                        notificationTitle = displayName + " (📢 " + sourceRoom.getName() + ")";
+                    }
+                }
+                notificationService.showMessageNotification(notificationTitle, message.getContent());
             }
         }
     }
@@ -1265,6 +1288,74 @@ public class ChatClientFXApp extends Application {
         } catch (Exception e) {
             log.error("Failed to load public rooms: " + e.getMessage());
         }
+    }
+
+    /**
+     * Handle room events (ROOM_CREATED, ROOM_DELETED) for real-time updates
+     */
+    @SuppressWarnings("unchecked")
+    private void handleRoomEvent(Map<String, Object> event) {
+        if (event == null)
+            return;
+
+        String eventType = (String) event.get("type");
+        log.info("🏠 Handling room event: {}", eventType);
+
+        Platform.runLater(() -> {
+            try {
+                if ("ROOM_CREATED".equals(eventType)) {
+                    // New room created - refresh public rooms list
+                    Map<String, Object> roomData = (Map<String, Object>) event.get("room");
+                    if (roomData != null) {
+                        Boolean isPrivate = (Boolean) roomData.get("isPrivate");
+                        String roomName = (String) roomData.get("name");
+
+                        // Only refresh for public rooms
+                        if (isPrivate == null || !isPrivate) {
+                            log.info("🌐 New public room created: {}, refreshing list...", roomName);
+                            loadPublicRooms();
+                            appendMessage("🆕 Phòng mới được tạo: " + roomName);
+                        }
+                    }
+
+                } else if ("ROOM_DELETED".equals(eventType)) {
+                    // Room deleted - refresh lists
+                    Object roomIdObj = event.get("roomId");
+                    Long deletedRoomId = null;
+                    if (roomIdObj instanceof Number) {
+                        deletedRoomId = ((Number) roomIdObj).longValue();
+                    }
+
+                    log.info("🗑️ Room {} deleted, refreshing lists...", deletedRoomId);
+                    loadPublicRooms();
+
+                    // If deleted room is in our loaded rooms, remove it
+                    if (loadedRooms != null && deletedRoomId != null) {
+                        final Long finalDeletedRoomId = deletedRoomId;
+                        loadedRooms.removeIf(room -> room.getId().equals(finalDeletedRoomId));
+                        sidebar.loadRoomsFromChatRooms(loadedRooms);
+
+                        // If we were in the deleted room, switch to first available room
+                        if (currentRoomId != null && currentRoomId.equals(finalDeletedRoomId)) {
+                            if (!loadedRooms.isEmpty()) {
+                                ChatRoom firstRoom = loadedRooms.get(0);
+                                currentRoomId = firstRoom.getId();
+                                var messages = chatService.getRoomMessages(currentRoomId);
+                                contentArea.clearMessages();
+                                contentArea.addMessages(messages, currentUsername);
+                                appendMessage("⚠️ Phòng bạn đang xem đã bị xóa. Đã chuyển sang phòng: "
+                                        + firstRoom.getName());
+                            } else {
+                                contentArea.clearMessages();
+                                appendMessage("⚠️ Phòng bạn đang xem đã bị xóa.");
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("Error handling room event: {}", e.getMessage(), e);
+            }
+        });
     }
 
     /**

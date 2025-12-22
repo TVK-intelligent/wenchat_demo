@@ -368,13 +368,29 @@ public class NotificationService {
 
     /**
      * Show message notification
+     * - If window NOT focused: desktop notification + sound
+     * - If window focused: in-app toast + sound
      */
     public void showMessageNotification(String senderName, String messagePreview) {
+        if (!globalEnabled || !enabledMap.getOrDefault(NotificationType.MESSAGE, true)) {
+            return;
+        }
+
         String title = "💬 " + senderName;
         String message = messagePreview.length() > 50
                 ? messagePreview.substring(0, 47) + "..."
                 : messagePreview;
-        showNotification(NotificationType.MESSAGE, title, message);
+
+        if (windowFocused) {
+            // Window focused: play sound + show in-app toast
+            if (soundEnabled) {
+                playNotificationSound(NotificationType.MESSAGE);
+            }
+            showInAppToast(title, message);
+        } else {
+            // Window not focused: show desktop notification + sound
+            showNotification(NotificationType.MESSAGE, title, message);
+        }
     }
 
     /**

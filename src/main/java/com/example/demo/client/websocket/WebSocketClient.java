@@ -674,6 +674,54 @@ public class WebSocketClient {
         }
     }
 
+    /**
+     * 🏠 Subscribe to room events (created/deleted)
+     * This allows real-time updates when new public rooms are created or rooms are
+     * deleted
+     */
+    public void subscribeToRoomEvents(Consumer<Map<String, Object>> callback) {
+        if (stompSession == null || !connected)
+            return;
+
+        String destination = "/topic/rooms";
+        String subscriptionName = "room-events";
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to {}", subscriptionName);
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                @SuppressWarnings("unchecked")
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    try {
+                        Map<String, Object> event = parsePayload(payload, Map.class);
+                        if (event != null) {
+                            String eventType = (String) event.get("type");
+                            log.info("🏠 Received room event: {}", eventType);
+                            callback.accept(event);
+                        }
+                    } catch (Exception e) {
+                        log.error("Error parsing room event: {}", e.getMessage());
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("✅ Subscribed to room events (/topic/rooms)");
+        } catch (Exception e) {
+            log.error("Failed to subscribe to room events: " + e.getMessage());
+        }
+    }
+
     public boolean isConnected() {
         return connected && stompSession != null && stompSession.isConnected();
     }
