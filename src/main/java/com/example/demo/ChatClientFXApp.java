@@ -666,6 +666,7 @@ public class ChatClientFXApp extends Application {
                     webSocketClient.subscribeToUserStatus(this::handleUserStatusUpdate);
                     webSocketClient.subscribeToMessageRecall(this::handleMessageRecall);
                     webSocketClient.subscribeToRoomEvents(this::handleRoomEvent);
+                    webSocketClient.subscribeToReactions(this::handleReactionUpdate);
 
                     // Update UI status
                     contentArea.setOnlineStatus(true);
@@ -821,6 +822,39 @@ public class ChatClientFXApp extends Application {
 
             // Load friends for Direct Messages
             loadFriends();
+
+            // Subscribe to room events for real-time updates
+            if (webSocketClient != null && webSocketClient.isConnected()) {
+                webSocketClient.subscribeToRoomEvents(event -> {
+                    Platform.runLater(() -> {
+                        String eventType = (String) event.get("type");
+                        if ("ROOM_CREATED".equals(eventType)) {
+                            @SuppressWarnings("unchecked")
+                            java.util.Map<String, Object> roomData = (java.util.Map<String, Object>) event.get("room");
+                            if (roomData != null) {
+                                Boolean isPrivate = (Boolean) roomData.get("private");
+                                if (isPrivate == null || !isPrivate) { // Only add public rooms
+                                    Long roomId = ((Number) roomData.get("id")).longValue();
+                                    String roomName = (String) roomData.get("name");
+                                    Integer memberCount = roomData.get("memberCount") != null
+                                            ? ((Number) roomData.get("memberCount")).intValue()
+                                            : 0;
+                                    sidebar.addPublicRoom(roomId, roomName, memberCount);
+                                    log.info("🏠 New public room added: {} (ID: {})", roomName, roomId);
+                                }
+                            }
+                        } else if ("ROOM_DELETED".equals(eventType)) {
+                            Object roomIdObj = event.get("roomId");
+                            if (roomIdObj != null) {
+                                Long roomId = ((Number) roomIdObj).longValue();
+                                sidebar.removePublicRoom(roomId);
+                                log.info("🗑️ Room deleted: {}", roomId);
+                            }
+                        }
+                    });
+                });
+                log.info("✅ Subscribed to room events for real-time updates");
+            }
 
         } catch (Exception e) {
             log.error("Error loading rooms", e);
@@ -1595,6 +1629,41 @@ public class ChatClientFXApp extends Application {
             // Log success for private message recall (private messages have no roomId or a
             // private room ID)
             log.info("🔙 Recall notification processed for message: {}", recallResponse.getMessageId());
+        });
+    }
+
+    /**
+     * 😀 Handle reaction update notification from WebSocket
+     * Updates the UI when someone adds/removes a reaction on a message
+     */
+    private void handleReactionUpdate(java.util.Map<String, Object> reactionEvent) {
+        if (reactionEvent == null)
+            return;
+
+        Object messageIdObj = reactionEvent.get("messageId");
+        String emoji = (String) reactionEvent.get("emoji");
+        String action = (String) reactionEvent.get("action");
+        String displayName = (String) reactionEvent.get("displayName");
+
+        Long messageId = null;
+        if (messageIdObj instanceof Number) {
+            messageId = ((Number) messageIdObj).longValue();
+        }
+
+        if (messageId == null) {
+            log.warn("😀 Reaction event has null messageId");
+            return;
+        }
+
+        log.info("😀 Reaction update received: {} {} {} on message {}",
+                displayName, action, emoji, messageId);
+        System.out.println(
+                "😀 handleReactionUpdate: " + displayName + " " + action + " " + emoji + " on message " + messageId);
+
+        // Refresh reaction counts in ContentArea
+        final Long finalMessageId = messageId;
+        Platform.runLater(() -> {
+            contentArea.refreshReactionForMessage(finalMessageId);
         });
     }
 

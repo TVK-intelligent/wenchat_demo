@@ -60,6 +60,9 @@ public class WebSocketClient {
     // and PrivateChatDialog)
     private final java.util.List<Consumer<RecallResponse>> recallCallbacks = new java.util.concurrent.CopyOnWriteArrayList<>();
 
+    // 😀 Reaction callback for both room and private reactions
+    private Consumer<Map<String, Object>> reactionCallback;
+
     public WebSocketClient(String serverUrl) {
         this.serverUrl = serverUrl;
         objectMapper.registerModule(new JavaTimeModule());
@@ -176,6 +179,9 @@ public class WebSocketClient {
 
             subscriptionIds.put(id, subscription);
             log.info("Subscribed to room " + roomId);
+
+            // 😀 Also subscribe to room reactions
+            subscribeToRoomReactions(roomId);
         } catch (Exception e) {
             log.error("Subscribe failed: " + e.getMessage());
         }
@@ -741,6 +747,109 @@ public class WebSocketClient {
         if (callback != null) {
             recallCallbacks.remove(callback);
             log.info("🔙 Removed recall callback, remaining listeners: {}", recallCallbacks.size());
+        }
+    }
+
+    /**
+     * 😀 Subscribe to reaction updates for private messages
+     * Broadcasts reaction events (add/remove) to the callback
+     */
+    public void subscribeToReactions(Consumer<Map<String, Object>> callback) {
+        System.out.println("😀 subscribeToReactions CALLED! currentUserId=" + currentUserId);
+
+        // Save callback for use by room reactions too
+        this.reactionCallback = callback;
+
+        if (stompSession == null || !connected) {
+            System.out.println("😀 Cannot subscribe: stompSession=" + stompSession + ", connected=" + connected);
+            log.warn("Cannot subscribe to reactions: not connected");
+            return;
+        }
+
+        String destination = "/topic/reactions/private/" + currentUserId;
+        String subscriptionName = "private-reactions";
+        System.out.println("😀 Subscribing to: " + destination);
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to reactions");
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                @SuppressWarnings("unchecked")
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    System.out.println("😀 Received reaction event!");
+                    Map<String, Object> reactionEvent = parsePayload(payload, Map.class);
+                    if (reactionEvent != null && callback != null) {
+                        log.info("😀 Reaction event received: messageId={}, emoji={}, action={}",
+                                reactionEvent.get("messageId"),
+                                reactionEvent.get("emoji"),
+                                reactionEvent.get("action"));
+                        callback.accept(reactionEvent);
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("✅ Subscribed to reaction updates: {}", destination);
+        } catch (Exception e) {
+            log.error("Failed to subscribe to reactions: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 😀 Subscribe to room reaction updates
+     * Called automatically when joining a room
+     */
+    public void subscribeToRoomReactions(Long roomId) {
+        if (stompSession == null || !connected) {
+            log.warn("Cannot subscribe to room reactions: not connected");
+            return;
+        }
+
+        String destination = "/topic/reactions/room/" + roomId;
+        String subscriptionName = "room-reactions-" + roomId;
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to room reactions for room {}", roomId);
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                @SuppressWarnings("unchecked")
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    System.out.println("😀 Received ROOM reaction event for room " + roomId);
+                    Map<String, Object> reactionEvent = parsePayload(payload, Map.class);
+                    if (reactionEvent != null && reactionCallback != null) {
+                        log.info("😀 Room reaction event received: messageId={}, emoji={}, action={}",
+                                reactionEvent.get("messageId"),
+                                reactionEvent.get("emoji"),
+                                reactionEvent.get("action"));
+                        reactionCallback.accept(reactionEvent);
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("✅ Subscribed to room reactions for room {}: {}", roomId, destination);
+        } catch (Exception e) {
+            log.error("Failed to subscribe to room reactions: " + e.getMessage());
         }
     }
 

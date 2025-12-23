@@ -468,6 +468,32 @@ public class Sidebar extends VBox {
     }
 
     /**
+     * Add a public room dynamically (real-time update when room is created)
+     */
+    public void addPublicRoom(Long roomId, String roomName, int memberCount) {
+        if (publicRoomsListView == null)
+            return;
+        String item = roomId + "|" + roomName + "|" + memberCount;
+        // Check if already exists
+        boolean exists = publicRoomsListView.getItems().stream()
+                .anyMatch(i -> i.startsWith(roomId + "|"));
+        if (!exists) {
+            publicRoomsListView.getItems().add(0, item); // Add to top
+            System.out.println("🏠 Added public room: " + roomName);
+        }
+    }
+
+    /**
+     * Remove a public room dynamically (real-time update when room is deleted)
+     */
+    public void removePublicRoom(Long roomId) {
+        if (publicRoomsListView == null)
+            return;
+        publicRoomsListView.getItems().removeIf(item -> item.startsWith(roomId + "|"));
+        System.out.println("🗑️ Removed public room: " + roomId);
+    }
+
+    /**
      * Cell for public room list with Join button
      */
     private class PublicRoomCell extends ListCell<String> {
@@ -510,24 +536,25 @@ public class Sidebar extends VBox {
                 Region spacer = new Region();
                 HBox.setHgrow(spacer, Priority.ALWAYS);
 
-                // Join button
-                Button joinBtn = new Button("Tham gia");
-                joinBtn.setStyle(
+                // Enter button (no need to join for public rooms)
+                Button enterBtn = new Button("Vào");
+                enterBtn.setTooltip(new Tooltip("Vào chat trực tiếp"));
+                enterBtn.setStyle(
                         "-fx-background-color: #4ade80; -fx-text-fill: white; " +
                                 "-fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 12; -fx-cursor: hand;");
-                joinBtn.setOnMouseEntered(e -> joinBtn.setStyle(
+                enterBtn.setOnMouseEntered(e -> enterBtn.setStyle(
                         "-fx-background-color: #22c55e; -fx-text-fill: white; " +
                                 "-fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 12; -fx-cursor: hand;"));
-                joinBtn.setOnMouseExited(e -> joinBtn.setStyle(
+                enterBtn.setOnMouseExited(e -> enterBtn.setStyle(
                         "-fx-background-color: #4ade80; -fx-text-fill: white; " +
                                 "-fx-font-size: 11px; -fx-padding: 6 12; -fx-background-radius: 12; -fx-cursor: hand;"));
-                joinBtn.setOnAction(e -> {
+                enterBtn.setOnAction(e -> {
                     if (onJoinPublicRoom != null) {
                         onJoinPublicRoom.accept(roomId);
                     }
                 });
 
-                roomBox.getChildren().addAll(iconPane, infoBox, spacer, joinBtn);
+                roomBox.getChildren().addAll(iconPane, infoBox, spacer, enterBtn);
 
                 // Hover effect
                 roomBox.setOnMouseEntered(e -> roomBox.setStyle(

@@ -45,6 +45,10 @@ public class RoomManagementDialog extends Stage {
     private ComboBox<ChatRoom> inviteRoomSelector;
     private Label myRoomCountLabel;
 
+    // Members management
+    private ListView<java.util.Map<String, Object>> membersList;
+    private ComboBox<ChatRoom> membersRoomSelector;
+
     // Avatar colors
     private static final Color[] AVATAR_COLORS = {
             Color.web("#667eea"), Color.web("#764ba2"), Color.web("#f093fb"),
@@ -206,7 +210,11 @@ public class RoomManagementDialog extends Stage {
         Tab pendingInvitesTab = new Tab("📥 Lời mời nhận được", createPendingInvitesTab());
         pendingInvitesTab.setClosable(false);
 
-        tabPane.getTabs().addAll(myRoomsTab, publicRoomsTab, createRoomTab, invitesTab, pendingInvitesTab);
+        // Members Management Tab
+        Tab membersTab = new Tab("👥 Thành viên", createMembersTab());
+        membersTab.setClosable(false);
+
+        tabPane.getTabs().addAll(myRoomsTab, publicRoomsTab, createRoomTab, invitesTab, pendingInvitesTab, membersTab);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
         // Bottom buttons
@@ -395,6 +403,232 @@ public class RoomManagementDialog extends Stage {
         return tabContent;
     }
 
+    private VBox createMembersTab() {
+        boolean isDark = SettingsDialog.isDarkTheme();
+        String textColor = isDark ? "#e2e8f0" : "#495057";
+        String bgColor = isDark ? "#374151" : "#f8f9fa";
+
+        VBox tabContent = new VBox(15);
+        tabContent.setPadding(new Insets(15));
+
+        // Room selector
+        Label selectLabel = new Label("Chọn phòng để quản lý thành viên:");
+        selectLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + textColor + ";");
+
+        membersRoomSelector = new ComboBox<>();
+        membersRoomSelector.setPromptText("Chọn phòng...");
+        membersRoomSelector.setPrefWidth(300);
+        membersRoomSelector.setCellFactory(param -> new ListCell<ChatRoom>() {
+            @Override
+            protected void updateItem(ChatRoom room, boolean empty) {
+                super.updateItem(room, empty);
+                if (empty || room == null) {
+                    setText(null);
+                } else {
+                    setText(room.getName() + (room.isPrivate() ? " 🔒" : " 🌐"));
+                }
+            }
+        });
+        membersRoomSelector.setButtonCell(new ListCell<ChatRoom>() {
+            @Override
+            protected void updateItem(ChatRoom room, boolean empty) {
+                super.updateItem(room, empty);
+                if (empty || room == null) {
+                    setText("Chọn phòng...");
+                } else {
+                    setText(room.getName() + (room.isPrivate() ? " 🔒" : " 🌐"));
+                }
+            }
+        });
+        membersRoomSelector.setOnAction(e -> loadMembersForRoom());
+
+        // Instructions
+        Label infoLabel = new Label("💡 Click chuột phải vào thành viên để thực hiện các thao tác admin");
+        infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + (isDark ? "#9ca3af" : "#6c757d") + ";");
+
+        // Members list
+        membersList = new ListView<>();
+        membersList.setPrefHeight(300);
+        membersList.setCellFactory(param -> new MemberListCell());
+        VBox.setVgrow(membersList, Priority.ALWAYS);
+        membersList.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 12; " +
+                "-fx-border-radius: 12; -fx-border-color: " + (isDark ? "#4b5563" : "#e9ecef") + ";");
+        membersList.setPlaceholder(new Label("Chọn phòng để xem thành viên"));
+
+        // Refresh button
+        Button refreshMembersBtn = createBeautifulButton("🔄", "Làm mới", "#4ade80");
+        refreshMembersBtn.setOnAction(e -> loadMembersForRoom());
+
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+        buttonBox.getChildren().add(refreshMembersBtn);
+
+        tabContent.getChildren().addAll(selectLabel, membersRoomSelector, infoLabel, membersList, buttonBox);
+        return tabContent;
+    }
+
+    private void loadMembersForRoom() {
+        ChatRoom selectedRoom = membersRoomSelector.getValue();
+        if (selectedRoom == null) {
+            membersList.getItems().clear();
+            return;
+        }
+
+        List<java.util.Map<String, Object>> members = chatService.getRoomMembersWithRoles(selectedRoom.getId());
+        membersList.getItems().clear();
+        membersList.getItems().addAll(members);
+        log.info("👥 Loaded {} members for room {}", members.size(), selectedRoom.getName());
+    }
+
+    /**
+     * Custom cell for members list with role display and admin actions
+     */
+    private class MemberListCell extends ListCell<java.util.Map<String, Object>> {
+        @Override
+        protected void updateItem(java.util.Map<String, Object> memberData, boolean empty) {
+            super.updateItem(memberData, empty);
+            if (empty || memberData == null) {
+                setGraphic(null);
+                return;
+            }
+
+            boolean isDark = SettingsDialog.isDarkTheme();
+
+            // Extract user and role info
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> userMap = (java.util.Map<String, Object>) memberData.get("user");
+            String role = String.valueOf(memberData.get("role"));
+
+            String username = userMap != null ? String.valueOf(userMap.get("username")) : "Unknown";
+            String displayName = userMap != null && userMap.get("displayName") != null
+                    ? String.valueOf(userMap.get("displayName"))
+                    : username;
+            Long userId = userMap != null && userMap.get("id") != null
+                    ? ((Number) userMap.get("id")).longValue()
+                    : null;
+
+            HBox container = new HBox(12);
+            container.setAlignment(Pos.CENTER_LEFT);
+            container.setPadding(new Insets(10, 15, 10, 15));
+            container.setStyle("-fx-background-color: " + (isDark ? "#374151" : "#ffffff") + "; " +
+                    "-fx-background-radius: 10; -fx-border-color: " + (isDark ? "#4b5563" : "#e9ecef") + "; " +
+                    "-fx-border-radius: 10;");
+
+            // Avatar
+            Circle avatar = new Circle(20);
+            int colorIndex = Math.abs(username.hashCode()) % AVATAR_COLORS.length;
+            avatar.setFill(AVATAR_COLORS[colorIndex]);
+            String initial = displayName.length() > 0 ? displayName.substring(0, 1).toUpperCase() : "?";
+            Label initialLabel = new Label(initial);
+            initialLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14px;");
+            StackPane avatarPane = new StackPane(avatar, initialLabel);
+            avatarPane.setMinSize(40, 40);
+            avatarPane.setMaxSize(40, 40);
+
+            // User info
+            VBox infoBox = new VBox(2);
+            Label nameLabel = new Label(displayName);
+            nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " +
+                    (isDark ? "#f1f5f9" : "#212529") + ";");
+            Label usernameLabel = new Label("@" + username);
+            usernameLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + (isDark ? "#9ca3af" : "#6c757d") + ";");
+            infoBox.getChildren().addAll(nameLabel, usernameLabel);
+            HBox.setHgrow(infoBox, Priority.ALWAYS);
+
+            // Role badge
+            Label roleBadge = new Label();
+            switch (role) {
+                case "OWNER":
+                    roleBadge.setText("👑 Chủ phòng");
+                    roleBadge.setStyle("-fx-background-color: #fbbf24; -fx-text-fill: #1f2937; " +
+                            "-fx-padding: 4 10; -fx-background-radius: 12; -fx-font-size: 11px; -fx-font-weight: bold;");
+                    break;
+                case "ADMIN":
+                    roleBadge.setText("⭐ Phó phòng");
+                    roleBadge.setStyle("-fx-background-color: #8b5cf6; -fx-text-fill: white; " +
+                            "-fx-padding: 4 10; -fx-background-radius: 12; -fx-font-size: 11px; -fx-font-weight: bold;");
+                    break;
+                default:
+                    roleBadge.setText("👤 Thành viên");
+                    roleBadge.setStyle("-fx-background-color: " + (isDark ? "#4b5563" : "#e5e7eb") + "; " +
+                            "-fx-text-fill: " + (isDark ? "#e5e7eb" : "#4b5563") + "; " +
+                            "-fx-padding: 4 10; -fx-background-radius: 12; -fx-font-size: 11px;");
+            }
+
+            container.getChildren().addAll(avatarPane, infoBox, roleBadge);
+
+            // Context menu for admin actions
+            ChatRoom selectedRoom = membersRoomSelector.getValue();
+            if (selectedRoom != null && userId != null) {
+                ContextMenu contextMenu = new ContextMenu();
+                Long ownerId = selectedRoom.getOwnerId();
+                Long currentUserId = chatService.getCurrentUserId();
+
+                // Debug logging
+                System.out.println("🔍 DEBUG: selectedRoom=" + selectedRoom.getName() +
+                        ", ownerId=" + ownerId +
+                        ", currentUserId=" + currentUserId +
+                        ", targetUserId=" + userId +
+                        ", role=" + role);
+
+                // Only owner can promote/demote
+                if (ownerId != null && ownerId.equals(currentUserId) && !role.equals("OWNER")) {
+                    if (role.equals("MEMBER")) {
+                        MenuItem promoteItem = new MenuItem("⭐ Phong làm Phó phòng");
+                        promoteItem.setOnAction(e -> {
+                            if (chatService.promoteToAdmin(selectedRoom.getId(), userId)) {
+                                showInfo("Thành công", displayName + " đã được phong làm Phó phòng");
+                                loadMembersForRoom();
+                            } else {
+                                showError("Lỗi", "Không thể phong Phó phòng");
+                            }
+                        });
+                        contextMenu.getItems().add(promoteItem);
+                    } else if (role.equals("ADMIN")) {
+                        MenuItem demoteItem = new MenuItem("⬇️ Hạ cấp về Thành viên");
+                        demoteItem.setOnAction(e -> {
+                            if (chatService.demoteFromAdmin(selectedRoom.getId(), userId)) {
+                                showInfo("Thành công", displayName + " đã bị hạ cấp về Thành viên");
+                                loadMembersForRoom();
+                            } else {
+                                showError("Lỗi", "Không thể hạ cấp Admin");
+                            }
+                        });
+                        contextMenu.getItems().add(demoteItem);
+                    }
+                }
+
+                // Owner and Admin can kick (except owner can't be kicked)
+                boolean canKick = (ownerId != null && ownerId.equals(currentUserId)) ||
+                        (chatService.isRoomAdmin(selectedRoom.getId()));
+                if (canKick && !role.equals("OWNER") && !userId.equals(currentUserId)) {
+                    // Admin can only kick Member, not other Admin
+                    boolean isCurrentUserOwner = ownerId != null && ownerId.equals(currentUserId);
+                    if (isCurrentUserOwner || role.equals("MEMBER")) {
+                        MenuItem kickItem = new MenuItem("🚫 Đuổi khỏi phòng");
+                        kickItem.setStyle("-fx-text-fill: #ef4444;");
+                        kickItem.setOnAction(e -> {
+                            if (chatService.kickMember(selectedRoom.getId(), userId)) {
+                                showInfo("Thành công", displayName + " đã bị đuổi khỏi phòng");
+                                loadMembersForRoom();
+                            } else {
+                                showError("Lỗi", "Không thể đuổi thành viên");
+                            }
+                        });
+                        contextMenu.getItems().add(kickItem);
+                    }
+                }
+
+                if (!contextMenu.getItems().isEmpty()) {
+                    container.setOnContextMenuRequested(
+                            e -> contextMenu.show(container, e.getScreenX(), e.getScreenY()));
+                }
+            }
+
+            setGraphic(container);
+        }
+    }
+
     private void loadData() {
         // Load my rooms - filter out auto-created private chat rooms
         List<ChatRoom> myRooms = chatService.getMyRooms().stream()
@@ -425,6 +659,12 @@ public class RoomManagementDialog extends Stage {
             java.util.List<java.util.Map<String, Object>> pendingInvites = chatService.getPendingRoomInvites();
             pendingInvitesList.getItems().clear();
             pendingInvitesList.getItems().addAll(pendingInvites);
+        }
+
+        // Load rooms for members management selector
+        if (membersRoomSelector != null) {
+            membersRoomSelector.getItems().clear();
+            membersRoomSelector.getItems().addAll(myRooms);
         }
     }
 
@@ -511,7 +751,8 @@ public class RoomManagementDialog extends Stage {
                 return;
             }
 
-            ChatRoom newRoom = chatService.createRoom(name, roomDescriptionField.getText());
+            ChatRoom newRoom = chatService.createRoom(name, roomDescriptionField.getText(),
+                    privateRoomCheckBox.isSelected());
             if (newRoom != null) {
                 // Refresh data
                 refreshData();

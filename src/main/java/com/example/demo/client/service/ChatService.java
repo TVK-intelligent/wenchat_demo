@@ -30,6 +30,7 @@ public class ChatService {
     private final String baseUrl;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private String jwtToken;
+    private Long currentUserId; // Store current user's ID after login
 
     public ChatService(String baseUrl) {
         this.baseUrl = baseUrl;
@@ -74,7 +75,8 @@ public class ChatService {
 
             if (result.getToken() != null) {
                 this.jwtToken = result.getToken();
-                log.info("Logged in as " + username);
+                this.currentUserId = result.getUserId(); // Store user ID
+                log.info("Logged in as " + username + " (ID: " + this.currentUserId + ")");
             }
 
             return result;
@@ -500,15 +502,15 @@ public class ChatService {
     /**
      * 🏠 Create new room
      */
-    public ChatRoom createRoom(String roomName, String description) {
+    public ChatRoom createRoom(String roomName, String description, boolean isPrivate) {
         try {
             Map<String, Object> request = new HashMap<>();
             request.put("name", roomName);
             request.put("description", description);
-            request.put("isPrivate", false); // Create as public room by default
+            request.put("isPrivate", isPrivate);
             String response = post("/api/rooms", objectMapper.writeValueAsString(request), true);
             ChatRoom room = objectMapper.readValue(response, ChatRoom.class);
-            log.info("Room created: " + roomName);
+            log.info("Room created: " + roomName + " (private=" + isPrivate + ")");
             return room;
 
         } catch (Exception e) {
@@ -964,6 +966,164 @@ public class ChatService {
         } catch (Exception e) {
             log.error("Failed to get total unread count: {}", e.getMessage());
             return 0;
+        }
+    }
+
+    // ==================== MESSAGE REACTIONS API ====================
+
+    /**
+     * 😀 Toggle reaction on a message (add if not exists, remove if exists)
+     * 
+     * @param messageId ID of the message
+     * @param emoji     Emoji to toggle (e.g., "👍", "❤️", "😂")
+     * @return true if added, false if removed
+     */
+    public Boolean toggleReaction(Long messageId, String emoji) {
+        try {
+            Map<String, String> request = new HashMap<>();
+            request.put("emoji", emoji);
+            String response = post("/api/messages/" + messageId + "/reactions",
+                    objectMapper.writeValueAsString(request), true);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = objectMapper.readValue(response, Map.class);
+            String action = (String) result.get("action");
+            log.info("😀 Reaction {} {} on message {}", emoji, action, messageId);
+            return "ADDED".equals(action);
+        } catch (Exception e) {
+            log.error("Failed to toggle reaction: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * ❌ Remove a specific reaction
+     */
+    public boolean removeReaction(Long messageId, String emoji) {
+        try {
+            delete("/api/messages/" + messageId + "/reactions/" + java.net.URLEncoder.encode(emoji, "UTF-8"), true);
+            log.info("❌ Reaction {} removed from message {}", emoji, messageId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to remove reaction: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 📊 Get reactions for a message
+     */
+    public List<Map<String, Object>> getReactions(Long messageId) {
+        try {
+            String response = get("/api/messages/" + messageId + "/reactions", true);
+            return objectMapper.readValue(response,
+                    TypeFactory.defaultInstance().constructCollectionType(List.class, Map.class));
+        } catch (Exception e) {
+            log.error("Failed to get reactions: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 📊 Get reaction summary (emoji counts) for a message
+     */
+    public Map<String, Object> getReactionSummary(Long messageId) {
+        try {
+            String response = get("/api/messages/" + messageId + "/reactions/summary", true);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = objectMapper.readValue(response, Map.class);
+            return result;
+        } catch (Exception e) {
+            log.error("Failed to get reaction summary: {}", e.getMessage());
+            return new HashMap<>();
+        }
+    }
+
+    // ==================== ROOM ADMIN MANAGEMENT API ====================
+
+    /**
+     * 👑 Promote a member to admin (owner only)
+     */
+    public boolean promoteToAdmin(Long roomId, Long userId) {
+        try {
+            post("/api/rooms/" + roomId + "/admins/" + userId, "{}", true);
+            log.info("👑 User {} promoted to admin in room {}", userId, roomId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to promote to admin: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * ⬇️ Demote an admin to member (owner only)
+     */
+    public boolean demoteFromAdmin(Long roomId, Long userId) {
+        try {
+            delete("/api/rooms/" + roomId + "/admins/" + userId, true);
+            log.info("⬇️ User {} demoted from admin in room {}", userId, roomId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to demote admin: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 🚫 Kick a member from room (owner or admin)
+     */
+    public boolean kickMember(Long roomId, Long userId) {
+        try {
+            delete("/api/rooms/" + roomId + "/members/" + userId, true);
+            log.info("🚫 User {} kicked from room {}", userId, roomId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to kick member: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 👥 Get room members with their roles
+     */
+    public List<Map<String, Object>> getRoomMembersWithRoles(Long roomId) {
+        try {
+            String response = get("/api/rooms/" + roomId + "/members-with-roles", true);
+            return objectMapper.readValue(response,
+                    TypeFactory.defaultInstance().constructCollectionType(List.class, Map.class));
+        } catch (Exception e) {
+            log.error("Failed to get room members with roles: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 🆔 Get current logged-in user's ID
+     */
+    public Long getCurrentUserId() {
+        return this.currentUserId;
+    }
+
+    /**
+     * 👮 Check if current user is admin of a room
+     */
+    public boolean isRoomAdmin(Long roomId) {
+        try {
+            List<Map<String, Object>> members = getRoomMembersWithRoles(roomId);
+            for (Map<String, Object> member : members) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> userMap = (Map<String, Object>) member.get("user");
+                if (userMap != null && userMap.get("id") != null) {
+                    Long userId = ((Number) userMap.get("id")).longValue();
+                    if (userId.equals(currentUserId)) {
+                        String role = String.valueOf(member.get("role"));
+                        return "ADMIN".equals(role) || "OWNER".equals(role);
+                    }
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            log.error("Failed to check admin status: {}", e.getMessage());
+            return false;
         }
     }
 

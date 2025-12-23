@@ -511,15 +511,40 @@ public class ContentArea extends BorderPane {
                             "-fx-padding: 2 0 2 0;");
         }
 
-        // Context Menu for recall
+        // Context Menu for recall and reactions
         System.out.println(
                 "📩 ContentArea.addMessage: messageId=" + messageId + ", isMine=" + isMine + ", recalled=" + recalled);
+
+        ContextMenu contextMenu = new ContextMenu();
+
+        // Add reaction menu for OTHER PEOPLE's messages only (not mine, not recalled)
+        if (!isMine && !recalled && messageId != null) {
+            Menu reactionMenu = new Menu("😀 Phản ứng");
+            String[] quickEmojis = { "👍", "❤️", "😂", "😮", "😢", "😡" };
+            for (String emoji : quickEmojis) {
+                MenuItem emojiItem = new MenuItem(emoji);
+                emojiItem.setStyle("-fx-font-size: 18px;");
+                final Long finalMsgId = messageId;
+                emojiItem.setOnAction(e -> {
+                    if (chatService != null) {
+                        Boolean added = chatService.toggleReaction(finalMsgId, emoji);
+                        if (added != null) {
+                            System.out.println("😀 Reaction " + emoji + " " + (added ? "added" : "removed")
+                                    + " on message " + finalMsgId);
+                        }
+                    }
+                });
+                reactionMenu.getItems().add(emojiItem);
+            }
+            contextMenu.getItems().add(reactionMenu);
+        }
+
+        // Add recall option for own messages
         if (isMine && !recalled && messageId != null) {
             long minutesElapsed = ChronoUnit.MINUTES.between(timestamp, LocalDateTime.now());
             System.out.println("⏱️ Message " + messageId + " - minutes elapsed: " + minutesElapsed);
             if (minutesElapsed < 2) {
-                ContextMenu contextMenu = new ContextMenu();
-                MenuItem recallItem = new MenuItem("Thu hồi");
+                MenuItem recallItem = new MenuItem("🔄 Thu hồi");
                 recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
                 final Long finalMessageId = messageId;
                 recallItem.setOnAction(e -> {
@@ -534,13 +559,17 @@ public class ContentArea extends BorderPane {
                     }
                 });
                 contextMenu.getItems().add(recallItem);
-                bubble.setOnContextMenuRequested(ev -> contextMenu.show(bubble, ev.getScreenX(), ev.getScreenY()));
                 System.out.println("✅ Added recall context menu for message " + messageId);
             } else {
                 System.out.println("⚠️ Message " + messageId + " is older than 2 minutes");
             }
         } else if (isMine && !recalled && messageId == null) {
             System.out.println("⚠️ Message has NULL ID - cannot add recall menu!");
+        }
+
+        // Set context menu on bubble if has items
+        if (!contextMenu.getItems().isEmpty()) {
+            bubble.setOnContextMenuRequested(ev -> contextMenu.show(bubble, ev.getScreenX(), ev.getScreenY()));
         }
 
         // Thời gian - màu xám đậm cho light mode, trắng mờ cho dark mode
@@ -567,7 +596,121 @@ public class ContentArea extends BorderPane {
         timeBox.setPadding(new Insets(2, 0, 0, 0));
 
         bubble.getChildren().addAll(messageLabel, timeBox);
-        messageContainer.getChildren().add(bubble);
+
+        // 🎨 Zalo-style: Show reactions count + floating popup on hover
+        if (!recalled && messageId != null) {
+            final Long msgId = messageId;
+            final boolean darkMode = isDarkMode;
+
+            // Reaction counts display (always visible if has reactions)
+            HBox reactionCountsBox = new HBox(3);
+            reactionCountsBox.setId("reactionCountsBox");
+            reactionCountsBox.setUserData(msgId); // Store messageId for later lookup
+            reactionCountsBox.setAlignment(isMine ? Pos.CENTER_RIGHT : Pos.CENTER_LEFT);
+            reactionCountsBox.setPadding(new Insets(4, 0, 0, 0));
+            reactionCountsBox.setStyle("-fx-background-color: transparent;");
+
+            // Load and display reaction counts
+            loadReactionCounts(msgId, reactionCountsBox, darkMode);
+            bubble.getChildren().add(reactionCountsBox);
+
+            // 🎯 Zalo-style floating reaction picker (only for OTHER people's messages)
+            if (!isMine) {
+                // Create floating reaction popup - NO BACKGROUND, just emojis
+                HBox floatingReactionBar = new HBox(3);
+                floatingReactionBar.setAlignment(Pos.CENTER);
+                floatingReactionBar.setPadding(new Insets(2, 4, 2, 4));
+                floatingReactionBar.setStyle(
+                        "-fx-background-color: transparent;");
+                floatingReactionBar.setVisible(false);
+                floatingReactionBar.setManaged(false);
+                floatingReactionBar.setOpacity(0);
+
+                String[] quickEmojis = { "👍", "❤️", "😂", "😮", "😢", "😡" };
+
+                for (String emoji : quickEmojis) {
+                    Label emojiLabel = new Label(emoji);
+                    emojiLabel.setStyle(
+                            "-fx-font-size: 16px; " +
+                                    "-fx-cursor: hand; " +
+                                    "-fx-padding: 1;");
+
+                    // Hover animation
+                    emojiLabel.setOnMouseEntered(e -> {
+                        emojiLabel.setScaleX(1.2);
+                        emojiLabel.setScaleY(1.2);
+                        emojiLabel.setStyle("-fx-font-size: 18px; -fx-cursor: hand; -fx-padding: 1;");
+                    });
+                    emojiLabel.setOnMouseExited(e -> {
+                        emojiLabel.setScaleX(1.0);
+                        emojiLabel.setScaleY(1.0);
+                        emojiLabel.setStyle("-fx-font-size: 16px; -fx-cursor: hand; -fx-padding: 1;");
+                    });
+
+                    // Click to react
+                    emojiLabel.setOnMouseClicked(e -> {
+                        if (chatService != null) {
+                            Boolean added = chatService.toggleReaction(msgId, emoji);
+                            if (added != null) {
+                                // Pop animation
+                                emojiLabel.setScaleX(1.5);
+                                emojiLabel.setScaleY(1.5);
+                                new Thread(() -> {
+                                    try {
+                                        // Wait for backend to process before refreshing
+                                        Thread.sleep(300);
+                                        Platform.runLater(() -> {
+                                            emojiLabel.setScaleX(1.0);
+                                            emojiLabel.setScaleY(1.0);
+                                            // Refresh counts immediately after reaction
+                                            System.out.println("🔄 Refreshing reaction counts for msg " + msgId);
+                                            loadReactionCounts(msgId, reactionCountsBox, darkMode);
+                                        });
+                                    } catch (InterruptedException ignored) {
+                                    }
+                                }).start();
+                                System.out.println(
+                                        "😀 " + emoji + " " + (added ? "added ✅" : "removed ❌") + " on msg " + msgId);
+                            }
+                        }
+                    });
+
+                    floatingReactionBar.getChildren().add(emojiLabel);
+                }
+
+                // Position popup above the bubble
+                StackPane bubbleWrapper = new StackPane();
+                bubbleWrapper.getChildren().addAll(bubble, floatingReactionBar);
+                StackPane.setAlignment(floatingReactionBar, Pos.TOP_CENTER);
+                StackPane.setMargin(floatingReactionBar, new Insets(-45, 0, 0, 0));
+
+                // Show/hide on hover with animation
+                bubbleWrapper.setOnMouseEntered(e -> {
+                    floatingReactionBar.setVisible(true);
+                    floatingReactionBar.setManaged(true);
+                    FadeTransition fadeIn = new FadeTransition(Duration.millis(150), floatingReactionBar);
+                    fadeIn.setFromValue(0);
+                    fadeIn.setToValue(1);
+                    fadeIn.play();
+                });
+                bubbleWrapper.setOnMouseExited(e -> {
+                    FadeTransition fadeOut = new FadeTransition(Duration.millis(100), floatingReactionBar);
+                    fadeOut.setFromValue(1);
+                    fadeOut.setToValue(0);
+                    fadeOut.setOnFinished(ev -> {
+                        floatingReactionBar.setVisible(false);
+                        floatingReactionBar.setManaged(false);
+                    });
+                    fadeOut.play();
+                });
+
+                messageContainer.getChildren().add(bubbleWrapper);
+            } else {
+                messageContainer.getChildren().add(bubble);
+            }
+        } else {
+            messageContainer.getChildren().add(bubble);
+        }
 
         // Arrange based on sender
         if (isMine) {
@@ -1355,6 +1498,130 @@ public class ContentArea extends BorderPane {
         messageListView.scrollTo(messageListView.getItems().size() - 1);
 
         isRefreshingMessages = false;
+    }
+
+    /**
+     * 🎨 Load and display reaction counts for a message (e.g., ❤️2 👍1)
+     * Uses colorful badges - each emoji has its own background color!
+     */
+    @SuppressWarnings("unchecked")
+    private void loadReactionCounts(Long messageId, HBox reactionCountsBox, boolean isDarkMode) {
+        if (chatService == null || messageId == null)
+            return;
+
+        new Thread(() -> {
+            try {
+                java.util.Map<String, Object> summary = chatService.getReactionSummary(messageId);
+                if (summary == null || summary.isEmpty())
+                    return;
+
+                java.util.Map<String, Integer> counts = (java.util.Map<String, Integer>) summary.get("counts");
+                if (counts == null || counts.isEmpty())
+                    return;
+
+                Platform.runLater(() -> {
+                    reactionCountsBox.getChildren().clear();
+
+                    // Emoji to color mapping for colorful badges
+                    java.util.Map<String, String> emojiColors = new java.util.HashMap<>();
+                    emojiColors.put("👍", "#3b82f6"); // Blue
+                    emojiColors.put("❤️", "#ef4444"); // Red
+                    emojiColors.put("😂", "#f59e0b"); // Orange
+                    emojiColors.put("😮", "#8b5cf6"); // Purple
+                    emojiColors.put("😢", "#06b6d4"); // Cyan
+                    emojiColors.put("😡", "#f97316"); // Deep orange
+
+                    for (java.util.Map.Entry<String, Integer> entry : counts.entrySet()) {
+                        String emoji = entry.getKey();
+                        Integer count = entry.getValue();
+                        if (count == null || count <= 0)
+                            continue;
+
+                        // Get color for this emoji (or default gray)
+                        String bgColor = emojiColors.getOrDefault(emoji, isDarkMode ? "#4b5563" : "#9ca3af");
+
+                        // Create colorful emoji badge
+                        Label badge = new Label(emoji + (count > 1 ? " " + count : ""));
+                        badge.setStyle(
+                                "-fx-background-color: " + bgColor + "; " +
+                                        "-fx-text-fill: white; " +
+                                        "-fx-padding: 3 8; " +
+                                        "-fx-background-radius: 12; " +
+                                        "-fx-font-size: 13px; " +
+                                        "-fx-font-weight: bold; " +
+                                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 3, 0, 0, 1); " +
+                                        "-fx-cursor: hand;");
+
+                        // Hover effect - brighter
+                        badge.setOnMouseEntered(e -> {
+                            badge.setScaleX(1.1);
+                            badge.setScaleY(1.1);
+                        });
+                        badge.setOnMouseExited(e -> {
+                            badge.setScaleX(1.0);
+                            badge.setScaleY(1.0);
+                        });
+
+                        reactionCountsBox.getChildren().add(badge);
+                    }
+                });
+            } catch (Exception e) {
+                System.err.println("Failed to load reactions: " + e.getMessage());
+            }
+        }).start();
+    }
+
+    /**
+     * 😀 Refresh reaction counts for a specific message (called when receiving
+     * reaction update via WebSocket)
+     */
+    public void refreshReactionForMessage(Long messageId) {
+        if (messageId == null)
+            return;
+
+        System.out.println("😀 Refreshing reaction for message: " + messageId);
+
+        // Find the reactionCountsBox for this message in the ListView
+        Platform.runLater(() -> {
+            for (HBox row : messageListView.getItems()) {
+                // Each row contains a StackPane (bubbleWrapper) which contains the message
+                // bubble
+                // The reactionCountsBox is stored as user data on the row
+                @SuppressWarnings("unchecked")
+                java.util.Map<Long, HBox> reactionBoxMap = (java.util.Map<Long, HBox>) row.getUserData();
+
+                if (reactionBoxMap == null) {
+                    // Try to find reactionCountsBox through the hierarchy
+                    // The row structure is: HBox (row) -> children -> StackPane (bubbleWrapper) ->
+                    // VBox (contentVBox) -> HBox (reactionCountsBox)
+                    for (javafx.scene.Node child : row.getChildren()) {
+                        if (child instanceof StackPane stackPane) {
+                            for (javafx.scene.Node stackChild : stackPane.getChildren()) {
+                                if (stackChild instanceof VBox vbox) {
+                                    for (javafx.scene.Node vboxChild : vbox.getChildren()) {
+                                        if (vboxChild instanceof HBox hbox
+                                                && "reactionCountsBox".equals(hbox.getId())) {
+                                            // Found it! Check if this is the right message
+                                            Object msgIdData = hbox.getUserData();
+                                            if (msgIdData != null && msgIdData.equals(messageId)) {
+                                                System.out.println("😀 Found reactionCountsBox for message " + messageId
+                                                        + " - refreshing!");
+                                                loadReactionCounts(messageId, hbox, true);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // If not found by traversing, just refresh all messages (fallback)
+            System.out.println("😀 Could not find specific reaction box, refreshing all messages");
+            refreshAllMessages();
+        });
     }
 
     // Custom cell for messages
