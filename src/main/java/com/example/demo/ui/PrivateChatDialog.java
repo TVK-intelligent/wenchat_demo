@@ -1,6 +1,7 @@
 package com.example.demo.ui;
 
 import com.example.demo.client.model.ChatMessage;
+import com.example.demo.client.model.RecallResponse;
 import com.example.demo.client.model.User;
 import com.example.demo.client.service.ChatService;
 import com.example.demo.client.websocket.WebSocketClient;
@@ -55,6 +56,9 @@ public class PrivateChatDialog extends Stage {
     // Map to track message bubbles for recall updates
     private Map<Long, VBox> messageBubbles = new HashMap<>();
 
+    // 🔙 Recall callback reference for cleanup
+    private java.util.function.Consumer<RecallResponse> recallCallback;
+
     // Avatar colors
     private static final Color[] AVATAR_COLORS = {
             Color.web("#667eea"), Color.web("#764ba2"), Color.web("#f093fb"),
@@ -84,6 +88,20 @@ public class PrivateChatDialog extends Stage {
             scene.getStylesheets().add(getClass().getResource("/styles.css").toExternalForm());
         }
         setScene(scene);
+
+        // 🔙 Cleanup recall callback when dialog closes
+        setOnCloseRequest(e -> cleanup());
+        setOnHidden(e -> cleanup());
+    }
+
+    /**
+     * 🔙 Cleanup resources when dialog is closed
+     */
+    private void cleanup() {
+        if (webSocketClient != null && recallCallback != null) {
+            webSocketClient.removeRecallCallback(recallCallback);
+            log.info("🔙 Cleaned up recall callback for chat with {}", targetUser.getUsername());
+        }
     }
 
     private void initComponents() {
@@ -126,6 +144,36 @@ public class PrivateChatDialog extends Stage {
         // Subscribe to private messages
         if (webSocketClient != null && webSocketClient.isConnected()) {
             webSocketClient.subscribeToPrivateMessages(this::handleIncomingPrivateMessage);
+
+            // 🔙 Subscribe to recall notifications for private messages
+            // Store callback reference for cleanup when dialog closes
+            this.recallCallback = this::handleRecallNotification;
+            webSocketClient.subscribeToMessageRecall(this.recallCallback);
+            log.info("🔙 PrivateChatDialog subscribed to recall notifications for chat with user {}",
+                    targetUser.getId());
+        }
+    }
+
+    /**
+     * 🔙 Handle recall notification from WebSocket
+     */
+    private void handleRecallNotification(RecallResponse recallResponse) {
+        if (recallResponse == null || recallResponse.getMessageId() == null) {
+            return;
+        }
+
+        // Check if this recall is for a message in our conversation
+        // The recall could be from us or from the target user
+        Long messageId = recallResponse.getMessageId();
+
+        // Check if this message exists in our conversation
+        boolean isOurMessage = privateMessages.stream()
+                .anyMatch(msg -> messageId.equals(msg.getId()));
+
+        if (isOurMessage) {
+            log.info("🔙 Received recall notification for message {} in private chat with {}",
+                    messageId, targetUser.getUsername());
+            updateMessageAsRecalled(messageId);
         }
     }
 
@@ -336,13 +384,68 @@ public class PrivateChatDialog extends Stage {
                 (message.getSenderId().equals(currentUser.getId()) && message.getRecipientId() != null
                         && message.getRecipientId().equals(targetUser.getId()))) {
 
-            // Avoid duplicates
-            boolean isDuplicate = message.getSenderId().equals(currentUser.getId());
-            if (!isDuplicate) {
+            boolean isMyMessage = message.getSenderId().equals(currentUser.getId());
+
+            if (isMyMessage) {
+                // This is an echo of my own message from server - update ID for recall support
+                // Find the message without ID (recently sent) and update it with server's ID
+                if (message.getId() != null) {
+                    javafx.application.Platform.runLater(() -> {
+                        for (int i = privateMessages.size() - 1; i >= 0; i--) {
+                            ChatMessage localMsg = privateMessages.get(i);
+                            // Match by content and sender (recent message without ID)
+                            if (localMsg.getId() == null
+                                    && localMsg.getSenderId().equals(message.getSenderId())
+                                    && localMsg.getContent().equals(message.getContent())) {
+                                localMsg.setId(message.getId());
+                                // Update the bubble map with the new ID
+                                VBox bubble = messageBubbles.remove(null);
+                                if (bubble != null) {
+                                    messageBubbles.put(message.getId(), bubble);
+                                    // Add recall context menu now that we have the ID
+                                    addRecallContextMenu(bubble, message.getId(), localMsg.getTimestamp());
+                                }
+                                log.info("✅ Updated local message with server ID: {}", message.getId());
+                                break;
+                            }
+                        }
+                    });
+                }
+            } else {
+                // Message from other user - add to list and display
                 privateMessages.add(message);
                 javafx.application.Platform.runLater(() -> addMessageToView(message));
             }
         }
+    }
+
+    /**
+     * Add recall context menu to a message bubble
+     */
+    private void addRecallContextMenu(VBox bubble, Long messageId, java.time.LocalDateTime messageTimestamp) {
+        if (bubble == null || messageId == null)
+            return;
+
+        long minutesElapsed = ChronoUnit.MINUTES.between(messageTimestamp, LocalDateTime.now());
+        if (minutesElapsed >= 2) {
+            log.debug("⏱️ Message {} is older than 2 minutes, no recall menu", messageId);
+            return;
+        }
+
+        ContextMenu contextMenu = new ContextMenu();
+        MenuItem recallItem = new MenuItem("Thu hồi");
+        recallItem.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
+        recallItem.setOnAction(e -> {
+            boolean success = chatService.recallMessage(messageId);
+            if (success) {
+                updateMessageAsRecalled(messageId);
+            } else {
+                showError("Lỗi", "Không thể thu hồi tin nhắn.");
+            }
+        });
+        contextMenu.getItems().add(recallItem);
+        bubble.setOnContextMenuRequested(ev -> contextMenu.show(bubble, ev.getScreenX(), ev.getScreenY()));
+        log.info("✅ Added recall context menu for message {} (via echo update)", messageId);
     }
 
     private void addMessageToView(ChatMessage message) {
@@ -425,9 +528,9 @@ public class PrivateChatDialog extends Stage {
         }
 
         // Store bubble for recall updates
-        if (message.getId() != null) {
-            messageBubbles.put(message.getId(), bubble);
-        }
+        // For new messages without ID, store with null key (will be updated when echo
+        // received)
+        messageBubbles.put(message.getId(), bubble);
 
         // Arrange based on sender
         if (isMine) {

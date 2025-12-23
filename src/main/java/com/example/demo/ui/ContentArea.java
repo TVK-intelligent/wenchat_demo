@@ -1278,18 +1278,54 @@ public class ContentArea extends BorderPane {
         if (messageId == null)
             return;
 
+        System.out.println("🔙 ContentArea.updateMessageAsRecalled called for messageId: " + messageId);
+        System.out.println("🔙 Current messageHistory size: " + messageHistory.size());
+
         Platform.runLater(() -> {
             boolean updated = false;
             for (MessageData data : messageHistory) {
+                System.out.println("🔍 Checking message: id=" + data.messageId + ", user=" + data.user + ", content="
+                        + data.message);
                 if (messageId.equals(data.messageId)) {
                     data.recalled = true;
                     updated = true;
+                    System.out.println("✅ Found and updated message " + messageId + " as recalled");
                 }
             }
 
             if (updated) {
+                System.out.println("🔄 Refreshing messages after recall update");
                 // Refresh the whole list because we need to rebuild the bubbles
                 refreshAllMessages();
+            } else {
+                System.out.println("⚠️ Message " + messageId + " NOT found in messageHistory!");
+            }
+        });
+    }
+
+    /**
+     * Update the ID of a local message after receiving the echo from server
+     * This is needed for recall functionality to work on messages we just sent
+     */
+    public void updateLocalMessageWithServerId(Long messageId, String content, boolean isMine) {
+        if (messageId == null)
+            return;
+
+        Platform.runLater(() -> {
+            // Find the most recent message from us that doesn't have an ID yet
+            for (int i = messageHistory.size() - 1; i >= 0; i--) {
+                MessageData data = messageHistory.get(i);
+                if (data.messageId == null && data.isMine == isMine) {
+                    // Match by content if provided, otherwise just match first null ID message
+                    if (content == null || (data.message != null && data.message.equals(content))) {
+                        data.messageId = messageId;
+                        System.out.println("✅ ContentArea: Updated local message with server ID: " + messageId);
+
+                        // Refresh to add recall context menu now that we have ID
+                        refreshAllMessages();
+                        break;
+                    }
+                }
             }
         });
     }

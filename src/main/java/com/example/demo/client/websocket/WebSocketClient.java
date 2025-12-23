@@ -56,6 +56,10 @@ public class WebSocketClient {
     // Heartbeat scheduler to keep user ONLINE status
     private java.util.concurrent.ScheduledExecutorService heartbeatScheduler;
 
+    // 🔙 List of recall callbacks (supports multiple listeners like ChatClientFXApp
+    // and PrivateChatDialog)
+    private final java.util.List<Consumer<RecallResponse>> recallCallbacks = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     public WebSocketClient(String serverUrl) {
         this.serverUrl = serverUrl;
         objectMapper.registerModule(new JavaTimeModule());
@@ -636,41 +640,107 @@ public class WebSocketClient {
 
     /**
      * 🔙 Subscribe to message recall notifications
+     * Supports multiple callbacks (e.g., ChatClientFXApp and PrivateChatDialog)
      */
     public void subscribeToMessageRecall(Consumer<RecallResponse> callback) {
+        // Always add callback to the list (allows multiple listeners)
+        if (callback != null && !recallCallbacks.contains(callback)) {
+            recallCallbacks.add(callback);
+            log.info("🔙 Added recall callback, total listeners: {}", recallCallbacks.size());
+        }
+
         if (stompSession == null || !connected)
             return;
 
+        // Subscribe to user queue (standard way)
         String destination = "/user/queue/recall";
         String subscriptionName = "message-recall";
 
-        if (subscriptionIds.containsKey(subscriptionName)) {
-            log.debug("Already subscribed to {}", subscriptionName);
-            return;
+        // Only subscribe once to WebSocket, but broadcast to all callbacks
+        if (!subscriptionIds.containsKey(subscriptionName)) {
+            try {
+                StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                    @Override
+                    @NonNull
+                    public Type getPayloadType(@NonNull StompHeaders headers) {
+                        return byte[].class;
+                    }
+
+                    @Override
+                    public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                        System.out.println("🔙 [USER QUEUE] Received recall frame!");
+                        RecallResponse recallResponse = parsePayload(payload, RecallResponse.class);
+                        if (recallResponse != null) {
+                            log.info(
+                                    "🔙 [USER QUEUE] Received recall notification for message: {}, broadcasting to {} listeners",
+                                    recallResponse.getMessageId(), recallCallbacks.size());
+                            broadcastRecallToCallbacks(recallResponse);
+                        }
+                    }
+                });
+
+                subscriptionIds.put(subscriptionName, subscription);
+                log.info("✅ Subscribed to message recall via user queue: {}", destination);
+            } catch (Exception e) {
+                log.error("Failed to subscribe to message recall user queue: " + e.getMessage());
+            }
         }
 
-        try {
-            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
-                @Override
-                @NonNull
-                public Type getPayloadType(@NonNull StompHeaders headers) {
-                    return byte[].class;
-                }
+        // Also subscribe to topic fallback (for private message recalls)
+        String topicDestination = "/topic/private/recall/" + currentUserId;
+        String topicSubscriptionName = "message-recall-topic";
 
-                @Override
-                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
-                    RecallResponse recallResponse = parsePayload(payload, RecallResponse.class);
-                    if (recallResponse != null) {
-                        log.info("🔙 Received recall notification for message: {}", recallResponse.getMessageId());
-                        callback.accept(recallResponse);
-                    }
-                }
-            });
+        if (!subscriptionIds.containsKey(topicSubscriptionName)) {
+            try {
+                StompSession.Subscription topicSubscription = stompSession.subscribe(topicDestination,
+                        new StompFrameHandler() {
+                            @Override
+                            @NonNull
+                            public Type getPayloadType(@NonNull StompHeaders headers) {
+                                return byte[].class;
+                            }
 
-            subscriptionIds.put(subscriptionName, subscription);
-            log.info("✅ Subscribed to message recall notifications");
-        } catch (Exception e) {
-            log.error("Failed to subscribe to message recall: " + e.getMessage());
+                            @Override
+                            public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                                System.out.println("🔙 [TOPIC] Received recall frame on topic!");
+                                RecallResponse recallResponse = parsePayload(payload, RecallResponse.class);
+                                if (recallResponse != null) {
+                                    log.info(
+                                            "🔙 [TOPIC] Received recall notification for message: {}, broadcasting to {} listeners",
+                                            recallResponse.getMessageId(), recallCallbacks.size());
+                                    broadcastRecallToCallbacks(recallResponse);
+                                }
+                            }
+                        });
+
+                subscriptionIds.put(topicSubscriptionName, topicSubscription);
+                log.info("✅ Subscribed to message recall via topic: {}", topicDestination);
+            } catch (Exception e) {
+                log.error("Failed to subscribe to message recall topic: " + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Broadcast recall response to all registered callbacks
+     */
+    private void broadcastRecallToCallbacks(RecallResponse recallResponse) {
+        for (Consumer<RecallResponse> cb : recallCallbacks) {
+            try {
+                cb.accept(recallResponse);
+            } catch (Exception e) {
+                log.error("Error in recall callback: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 🔙 Remove a recall callback (call when PrivateChatDialog is closed)
+     */
+    public void removeRecallCallback(Consumer<RecallResponse> callback) {
+        if (callback != null) {
+            recallCallbacks.remove(callback);
+            log.info("🔙 Removed recall callback, remaining listeners: {}", recallCallbacks.size());
         }
     }
 

@@ -1553,29 +1553,48 @@ public class ChatClientFXApp extends Application {
 
     /**
      * 🔙 Handle message recall notification from WebSocket
+     * Handles both room message recalls and private message recalls
      */
     private void handleMessageRecall(RecallResponse recallResponse) {
-        if (recallResponse == null || recallResponse.getMessageId() == null)
-            return;
+        System.out.println("========================================");
+        System.out.println("🔙 handleMessageRecall CALLED!");
+        System.out.println("🔙 recallResponse: " + recallResponse);
 
-        log.info("🔙 Received recall for message: {}", recallResponse.getMessageId());
+        if (recallResponse == null || recallResponse.getMessageId() == null) {
+            System.out.println("⚠️ recallResponse is null or has null messageId!");
+            return;
+        }
+
+        System.out.println("🔙 Received recall for messageId: " + recallResponse.getMessageId());
+        System.out.println("🔙 roomId: " + recallResponse.getRoomId());
+        System.out.println("🔙 senderId: " + recallResponse.getSenderId());
+        System.out.println("========================================");
+
+        log.info("🔙 Received recall for message: {} (roomId={}, senderId={})",
+                recallResponse.getMessageId(), recallResponse.getRoomId(), recallResponse.getSenderId());
 
         Platform.runLater(() -> {
-            // Update UI to show recalled message
+            // Always update UI - this will find and update the message in messageHistory
+            // regardless of whether it's a room message or private message
             contentArea.updateMessageAsRecalled(recallResponse.getMessageId());
 
-            // Also update in local message storage if present
+            // Update in room messages storage if present (for room chats)
             if (recallResponse.getRoomId() != null) {
                 List<ChatMessage> messages = roomMessages.get(recallResponse.getRoomId());
                 if (messages != null) {
                     for (ChatMessage msg : messages) {
                         if (msg.getId() != null && msg.getId().equals(recallResponse.getMessageId())) {
                             msg.setRecalled(true);
+                            log.info("🔙 Updated recall status in roomMessages for message: {}", msg.getId());
                             break;
                         }
                     }
                 }
             }
+
+            // Log success for private message recall (private messages have no roomId or a
+            // private room ID)
+            log.info("🔙 Recall notification processed for message: {}", recallResponse.getMessageId());
         });
     }
 
