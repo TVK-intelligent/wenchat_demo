@@ -311,6 +311,12 @@ public class ChatClientFXApp extends Application {
         }
 
         RoomManagementDialog dialog = new RoomManagementDialog(chatService);
+        dialog.setOnRoomSelected(room -> {
+            // Switch to the selected room
+            String displayName = room.isPrivate() ? "🔒 " + room.getName() : "🌐 " + room.getName();
+            joinRoom(displayName);
+            loadRooms(); // Refresh rooms list to ensure consistency
+        });
         dialog.setOnBadgeUpdate(() -> {
             loadInitialBadgeCounts(); // Reload badge counts when accept/decline
         });
@@ -344,16 +350,10 @@ public class ChatClientFXApp extends Application {
             return;
         }
         try {
-            // 📨 Clear unread badge for this friend (UI) and mark as read on backend
+            // 📨 Clear unread badge for this friend (UI) immediately
             sidebar.clearUnreadCount(friend.getId());
 
-            // Mark all private messages from this friend as read on backend
-            // This ensures the unread count is reset on the server side
-            new Thread(() -> {
-                chatService.markAllPrivateMessagesAsRead(friend.getId());
-            }).start();
-
-            // Switch ContentArea to private chat mode
+            // Switch ContentArea to private chat mode immediately for responsive UI
             contentArea.switchToPrivateChatMode(friend);
 
             // Set up callbacks for sending messages
@@ -372,16 +372,67 @@ public class ChatClientFXApp extends Application {
                 }
             });
 
-            // Load private message history
-            loadPrivateChatMessages(friend);
+            // Show loading indicator
+            contentArea.showLoading(true);
+
+            // Load private messages in background thread
+            final User targetFriend = friend;
+            new Thread(() -> {
+                try {
+                    // Mark as read on backend (background)
+                    chatService.markAllPrivateMessagesAsRead(targetFriend.getId());
+
+                    // Load private message history (background)
+                    List<ChatMessage> messages = chatService.getPrivateMessages(targetFriend.getId());
+
+                    // Update UI on FX thread
+                    Platform.runLater(() -> {
+                        contentArea.showLoading(false);
+
+                        // Check if still in private chat with this user
+                        if (contentArea.isPrivateMode() &&
+                                contentArea.getPrivateChatUser() != null &&
+                                contentArea.getPrivateChatUser().getId().equals(targetFriend.getId())) {
+
+                            if (messages != null && !messages.isEmpty()) {
+                                for (ChatMessage msg : messages) {
+                                    boolean isMine = msg.getSenderId().equals(currentUserId);
+                                    String displayName = isMine ? currentUsername
+                                            : (targetFriend.getDisplayName() != null ? targetFriend.getDisplayName()
+                                                    : targetFriend.getUsername());
+
+                                    // Check if this is a file message
+                                    if (msg.getMessageType() == ChatMessage.MessageType.FILE ||
+                                            msg.getMessageType() == ChatMessage.MessageType.IMAGE) {
+                                        contentArea.addFileMessage(msg.getId(), displayName, msg.getFileName(),
+                                                msg.getContent(),
+                                                msg.getTimestamp(), isMine, msg.isRecalled());
+                                    } else {
+                                        contentArea.addMessage(msg.getId(), displayName, msg.getContent(),
+                                                msg.getTimestamp(), isMine,
+                                                msg.isRecalled());
+                                    }
+                                }
+                            }
+
+                            appendMessage("💬 Đang chat riêng với "
+                                    + (targetFriend.getDisplayName() != null ? targetFriend.getDisplayName()
+                                            : targetFriend.getUsername()));
+                        }
+                    });
+                } catch (Exception e) {
+                    log.error("Error loading private messages", e);
+                    Platform.runLater(() -> {
+                        contentArea.showLoading(false);
+                        appendMessage("❌ Lỗi khi tải tin nhắn: " + e.getMessage());
+                    });
+                }
+            }).start();
 
             // Subscribe to private messages for this user
             if (webSocketClient != null && webSocketClient.isConnected()) {
                 webSocketClient.subscribeToPrivateMessages(msg -> handlePrivateChatMessage(msg, friend));
             }
-
-            appendMessage("💬 Đang chat riêng với "
-                    + (friend.getDisplayName() != null ? friend.getDisplayName() : friend.getUsername()));
         } catch (Exception e) {
             log.error("Error opening private chat", e);
             showError("Lỗi", "Không thể mở chat: " + e.getMessage());
@@ -389,33 +440,16 @@ public class ChatClientFXApp extends Application {
     }
 
     /**
-     * Load private chat message history
+     * Load private chat message history - now integrated into
+     * openPrivateChatWithUser
+     * 
+     * @deprecated Use openPrivateChatWithUser instead which loads messages
+     *             asynchronously
      */
     private void loadPrivateChatMessages(User friend) {
-        try {
-            List<ChatMessage> messages = chatService.getPrivateMessages(friend.getId());
-            if (messages != null && !messages.isEmpty()) {
-                for (ChatMessage msg : messages) {
-                    boolean isMine = msg.getSenderId().equals(currentUserId);
-                    String displayName = isMine ? currentUsername
-                            : (friend.getDisplayName() != null ? friend.getDisplayName() : friend.getUsername());
-
-                    // Check if this is a file message
-                    if (msg.getMessageType() == ChatMessage.MessageType.FILE ||
-                            msg.getMessageType() == ChatMessage.MessageType.IMAGE) {
-                        // Pass message ID for recall functionality
-                        contentArea.addFileMessage(msg.getId(), displayName, msg.getFileName(), msg.getContent(),
-                                msg.getTimestamp(), isMine, msg.isRecalled());
-                    } else {
-                        // Pass message ID for recall functionality
-                        contentArea.addMessage(msg.getId(), displayName, msg.getContent(), msg.getTimestamp(), isMine,
-                                msg.isRecalled());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Error loading private messages", e);
-        }
+        // This method is now deprecated - loading is done in openPrivateChatWithUser
+        // Kept for backward compatibility but should not be called directly
+        log.warn("loadPrivateChatMessages called directly - should use openPrivateChatWithUser instead");
     }
 
     /**
@@ -997,31 +1031,57 @@ public class ChatClientFXApp extends Application {
                         .orElse(null);
 
                 if (targetRoom != null) {
-                    // 📨 Clear unread badge for this room (UI) and mark as read on backend
+                    // Prevent double-click issues
+                    if (currentRoomId != null && currentRoomId.equals(targetRoom.getId())) {
+                        return; // Already in this room
+                    }
+
+                    // 📨 Clear unread badge for this room (UI) immediately
                     sidebar.clearRoomUnreadCount(targetRoom.getId());
 
-                    // Mark all messages in this room as read on backend
-                    // This ensures unread count is reset on server side
-                    final Long roomIdToMark = targetRoom.getId();
-                    new Thread(() -> {
-                        chatService.markAllMessagesInRoomAsRead(roomIdToMark);
-                    }).start();
-
-                    // Fetch message history for the room
-                    List<ChatMessage> messages = chatService.getRoomMessages(targetRoom.getId());
-                    roomMessages.put(targetRoom.getId(), messages);
-
-                    // Clear current messages and display room messages
-                    contentArea.clearMessages();
-                    contentArea.addMessages(messages, currentUsername);
-
-                    // Update current room ID (no need to unsubscribe/subscribe - already subscribed
-                    // to all rooms)
+                    // Update current room ID immediately to prevent race conditions
+                    final Long previousRoomId = currentRoomId;
                     currentRoomId = targetRoom.getId();
-                    appendMessage("✅ Đã chuyển sang phòng: " + targetRoom.getName());
 
-                    // Update content area room selector
+                    // Update room selector immediately for responsive UI
                     contentArea.getRoomSelector().setValue(roomName);
+
+                    // Clear messages immediately for fast visual feedback
+                    contentArea.clearMessages();
+
+                    // Show loading indicator
+                    contentArea.showLoading(true);
+
+                    // Fetch messages in background thread
+                    final Long roomIdToLoad = targetRoom.getId();
+                    final String roomNameForLog = targetRoom.getName();
+
+                    new Thread(() -> {
+                        try {
+                            // Mark as read on backend (background)
+                            chatService.markAllMessagesInRoomAsRead(roomIdToLoad);
+
+                            // Fetch message history (background)
+                            List<ChatMessage> messages = chatService.getRoomMessages(roomIdToLoad);
+                            roomMessages.put(roomIdToLoad, messages);
+
+                            // Update UI on FX thread
+                            Platform.runLater(() -> {
+                                // Only update if still in this room (user might have switched again)
+                                if (currentRoomId != null && currentRoomId.equals(roomIdToLoad)) {
+                                    contentArea.showLoading(false);
+                                    contentArea.addMessages(messages, currentUsername);
+                                    appendMessage("✅ Đã chuyển sang phòng: " + roomNameForLog);
+                                }
+                            });
+                        } catch (Exception e) {
+                            log.error("Error loading room messages", e);
+                            Platform.runLater(() -> {
+                                contentArea.showLoading(false);
+                                appendMessage("❌ Lỗi khi tải tin nhắn: " + e.getMessage());
+                            });
+                        }
+                    }).start();
                 } else {
                     appendMessage("❌ Không tìm thấy phòng: " + roomName);
                 }
@@ -1427,16 +1487,36 @@ public class ChatClientFXApp extends Application {
         Platform.runLater(() -> {
             try {
                 if ("ROOM_CREATED".equals(eventType)) {
-                    // New room created - refresh public rooms list
+                    // New room created - refresh appropriate lists
                     Map<String, Object> roomData = (Map<String, Object>) event.get("room");
                     if (roomData != null) {
                         Boolean isPrivate = (Boolean) roomData.get("isPrivate");
                         String roomName = (String) roomData.get("name");
 
-                        // Only refresh for public rooms
-                        if (isPrivate == null || !isPrivate) {
-                            log.info("🌐 New public room created: {}, refreshing list...", roomName);
+                        // Check if current user is the owner of this room
+                        Map<String, Object> ownerData = (Map<String, Object>) roomData.get("owner");
+                        Long ownerId = null;
+                        if (ownerData != null && ownerData.get("id") != null) {
+                            ownerId = ((Number) ownerData.get("id")).longValue();
+                        }
+
+                        boolean isMyRoom = currentUserId != null && currentUserId.equals(ownerId);
+
+                        if (isPrivate != null && isPrivate) {
+                            // Private room created
+                            if (isMyRoom) {
+                                // My private room - refresh my rooms list
+                                log.info("🔒 My private room created: {}, refreshing my rooms...", roomName);
+                                loadRooms();
+                                appendMessage("� Phòng riêng tư mới được tạo: " + roomName);
+                            }
+                        } else {
+                            // Public room created
+                            log.info("�🌐 New public room created: {}, refreshing list...", roomName);
                             loadPublicRooms();
+                            if (isMyRoom) {
+                                loadRooms(); // Also refresh my rooms if I'm the owner
+                            }
                             appendMessage("🆕 Phòng mới được tạo: " + roomName);
                         }
                     }

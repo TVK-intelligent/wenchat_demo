@@ -561,6 +561,9 @@ public class RoomManagementDialog extends Stage {
             ChatRoom selectedRoom = membersRoomSelector.getValue();
             if (selectedRoom != null && userId != null) {
                 ContextMenu contextMenu = new ContextMenu();
+                contextMenu.setStyle("-fx-background-color: white; -fx-padding: 8; -fx-background-radius: 12; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 12, 0, 0, 4);");
+
                 Long ownerId = selectedRoom.getOwnerId();
                 Long currentUserId = chatService.getCurrentUserId();
 
@@ -574,7 +577,11 @@ public class RoomManagementDialog extends Stage {
                 // Only owner can promote/demote
                 if (ownerId != null && ownerId.equals(currentUserId) && !role.equals("OWNER")) {
                     if (role.equals("MEMBER")) {
-                        MenuItem promoteItem = new MenuItem("⭐ Phong làm Phó phòng");
+                        // Create beautiful promote button
+                        HBox promoteBox = RoomManagementDialog.this.createStyledMenuItem("⭐ Phong làm Phó phòng",
+                                "#8b5cf6", false);
+                        CustomMenuItem promoteItem = new CustomMenuItem(promoteBox);
+                        promoteItem.setHideOnClick(true);
                         promoteItem.setOnAction(e -> {
                             if (chatService.promoteToAdmin(selectedRoom.getId(), userId)) {
                                 showInfo("Thành công", displayName + " đã được phong làm Phó phòng");
@@ -585,7 +592,11 @@ public class RoomManagementDialog extends Stage {
                         });
                         contextMenu.getItems().add(promoteItem);
                     } else if (role.equals("ADMIN")) {
-                        MenuItem demoteItem = new MenuItem("⬇️ Hạ cấp về Thành viên");
+                        // Create beautiful demote button
+                        HBox demoteBox = RoomManagementDialog.this.createStyledMenuItem("⬇️ Hạ cấp về Thành viên",
+                                "#6b7280", false);
+                        CustomMenuItem demoteItem = new CustomMenuItem(demoteBox);
+                        demoteItem.setHideOnClick(true);
                         demoteItem.setOnAction(e -> {
                             if (chatService.demoteFromAdmin(selectedRoom.getId(), userId)) {
                                 showInfo("Thành công", displayName + " đã bị hạ cấp về Thành viên");
@@ -605,8 +616,11 @@ public class RoomManagementDialog extends Stage {
                     // Admin can only kick Member, not other Admin
                     boolean isCurrentUserOwner = ownerId != null && ownerId.equals(currentUserId);
                     if (isCurrentUserOwner || role.equals("MEMBER")) {
-                        MenuItem kickItem = new MenuItem("🚫 Đuổi khỏi phòng");
-                        kickItem.setStyle("-fx-text-fill: #ef4444;");
+                        // Create beautiful kick button
+                        HBox kickBox = RoomManagementDialog.this.createStyledMenuItem("🚫 Đuổi khỏi phòng", "#ef4444",
+                                true);
+                        CustomMenuItem kickItem = new CustomMenuItem(kickBox);
+                        kickItem.setHideOnClick(true);
                         kickItem.setOnAction(e -> {
                             if (chatService.kickMember(selectedRoom.getId(), userId)) {
                                 showInfo("Thành công", displayName + " đã bị đuổi khỏi phòng");
@@ -818,6 +832,45 @@ public class RoomManagementDialog extends Stage {
             alert.setContentText(message);
             alert.showAndWait();
         });
+    }
+
+    /**
+     * Create a styled menu item with background color for context menus
+     */
+    private HBox createStyledMenuItem(String text, String color, boolean isDanger) {
+        HBox box = new HBox(8);
+        box.setAlignment(Pos.CENTER_LEFT);
+        box.setPadding(new Insets(10, 16, 10, 16));
+        box.setMinWidth(180);
+
+        String bgColor = isDanger ? "#fef2f2" : "#f5f3ff";
+        String hoverBgColor = isDanger ? "#fee2e2" : "#ede9fe";
+        String textColor = color;
+
+        box.setStyle(
+                "-fx-background-color: " + bgColor + "; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-cursor: hand;");
+
+        Label label = new Label(text);
+        label.setStyle(
+                "-fx-font-size: 13px; " +
+                        "-fx-font-weight: 600; " +
+                        "-fx-text-fill: " + textColor + ";");
+
+        box.getChildren().add(label);
+
+        // Hover effect
+        box.setOnMouseEntered(e -> box.setStyle(
+                "-fx-background-color: " + hoverBgColor + "; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-cursor: hand;"));
+        box.setOnMouseExited(e -> box.setStyle(
+                "-fx-background-color: " + bgColor + "; " +
+                        "-fx-background-radius: 8; " +
+                        "-fx-cursor: hand;"));
+
+        return box;
     }
 
     // Custom cell for my rooms list with action buttons

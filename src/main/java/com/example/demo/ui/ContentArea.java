@@ -57,6 +57,7 @@ public class ContentArea extends BorderPane {
     private User privateChatUser;
     private HBox headerBox;
     private VBox chatContainer;
+    private StackPane loadingOverlay;
 
     // Callbacks
     @Setter
@@ -119,6 +120,10 @@ public class ContentArea extends BorderPane {
     private List<MessageData> messageHistory = new ArrayList<>();
     private boolean isRefreshingMessages = false;
 
+    // Store room data for restoring after private chat
+    private List<String> savedRoomItems = new ArrayList<>();
+    private String savedSelectedRoom = null;
+
     public ContentArea() {
         getStyleClass().add("chat-container");
         setStyle("-fx-background-color: #fafbfc;");
@@ -157,9 +162,71 @@ public class ContentArea extends BorderPane {
         messageListView.setCellFactory(param -> new MessageCell());
         VBox.setVgrow(messageListView, Priority.ALWAYS);
 
-        chatContainer.getChildren().addAll(header, messageListView);
+        // Create loading overlay
+        loadingOverlay = createLoadingOverlay();
+        loadingOverlay.setVisible(false);
+        loadingOverlay.setManaged(false);
+
+        // Use StackPane to layer messageListView and loading overlay
+        StackPane messagePane = new StackPane(messageListView, loadingOverlay);
+        VBox.setVgrow(messagePane, Priority.ALWAYS);
+
+        chatContainer.getChildren().addAll(header, messagePane);
 
         setCenter(chatContainer);
+    }
+
+    /**
+     * Create loading overlay with spinner
+     */
+    private StackPane createLoadingOverlay() {
+        StackPane overlay = new StackPane();
+        overlay.setStyle("-fx-background-color: rgba(255, 255, 255, 0.85);");
+
+        VBox loadingBox = new VBox(15);
+        loadingBox.setAlignment(Pos.CENTER);
+
+        // Loading spinner using ProgressIndicator
+        ProgressIndicator spinner = new ProgressIndicator();
+        spinner.setStyle("-fx-progress-color: #667eea;");
+        spinner.setPrefSize(50, 50);
+
+        Label loadingLabel = new Label("Đang tải tin nhắn...");
+        loadingLabel.setStyle(
+                "-fx-font-size: 14px; -fx-text-fill: #64748b; -fx-font-weight: 500;");
+
+        loadingBox.getChildren().addAll(spinner, loadingLabel);
+        overlay.getChildren().add(loadingBox);
+
+        return overlay;
+    }
+
+    /**
+     * Show or hide loading overlay
+     */
+    public void showLoading(boolean show) {
+        Platform.runLater(() -> {
+            if (loadingOverlay != null) {
+                if (show) {
+                    loadingOverlay.setVisible(true);
+                    loadingOverlay.setManaged(true);
+                    loadingOverlay.setOpacity(0);
+                    FadeTransition fadeIn = new FadeTransition(Duration.millis(150), loadingOverlay);
+                    fadeIn.setFromValue(0);
+                    fadeIn.setToValue(1);
+                    fadeIn.play();
+                } else {
+                    FadeTransition fadeOut = new FadeTransition(Duration.millis(150), loadingOverlay);
+                    fadeOut.setFromValue(1);
+                    fadeOut.setToValue(0);
+                    fadeOut.setOnFinished(e -> {
+                        loadingOverlay.setVisible(false);
+                        loadingOverlay.setManaged(false);
+                    });
+                    fadeOut.play();
+                }
+            }
+        });
     }
 
     private HBox createHeader() {
@@ -186,6 +253,13 @@ public class ContentArea extends BorderPane {
                 "-fx-background-color: transparent; -fx-border-color: transparent; " +
                         "-fx-font-size: 16px; -fx-font-weight: bold; -fx-padding: 0;");
         roomSelector.setPrefHeight(30);
+
+        // Update savedSelectedRoom when user selects a different room
+        roomSelector.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null && !privateMode) {
+                savedSelectedRoom = newVal;
+            }
+        });
 
         HBox statusBox = new HBox(6);
         statusBox.setAlignment(Pos.CENTER_LEFT);
@@ -1250,6 +1324,10 @@ public class ContentArea extends BorderPane {
         if (roomNames != null && !roomNames.isEmpty()) {
             roomSelector.getItems().addAll(roomNames);
             roomSelector.setValue(roomNames.get(0));
+
+            // Save for restore after private chat
+            savedRoomItems = new ArrayList<>(roomNames);
+            savedSelectedRoom = roomNames.get(0);
         }
     }
 
@@ -1258,12 +1336,16 @@ public class ContentArea extends BorderPane {
      */
     public void loadRoomsFromChatRooms(List<com.example.demo.client.model.ChatRoom> rooms) {
         roomSelector.getItems().clear();
+        savedRoomItems.clear();
+
         if (rooms != null && !rooms.isEmpty()) {
             for (com.example.demo.client.model.ChatRoom room : rooms) {
                 String displayName = room.isPrivate() ? "🔒 " + room.getName() : "🌐 " + room.getName();
                 roomSelector.getItems().add(displayName);
+                savedRoomItems.add(displayName);
             }
             roomSelector.setValue(roomSelector.getItems().get(0));
+            savedSelectedRoom = roomSelector.getItems().get(0);
         }
     }
 
@@ -1284,12 +1366,16 @@ public class ContentArea extends BorderPane {
 
         headerBox = createPrivateChatHeader(user);
 
-        // Rebuild chat container with private header
+        // Rebuild chat container with private header and loading overlay support
         chatContainer = new VBox(0);
         chatContainer.getStyleClass().add("chat-container");
         VBox.setVgrow(chatContainer, Priority.ALWAYS);
-        VBox.setVgrow(messageListView, Priority.ALWAYS);
-        chatContainer.getChildren().addAll(headerBox, messageListView);
+
+        // Create StackPane for message list and loading overlay
+        StackPane messagePane = new StackPane(messageListView, loadingOverlay);
+        VBox.setVgrow(messagePane, Priority.ALWAYS);
+
+        chatContainer.getChildren().addAll(headerBox, messagePane);
 
         setCenter(chatContainer);
     }
@@ -1307,11 +1393,25 @@ public class ContentArea extends BorderPane {
         // Rebuild with normal room header
         headerBox = createHeader();
 
+        // Restore saved room items into the new roomSelector
+        if (!savedRoomItems.isEmpty()) {
+            roomSelector.getItems().addAll(savedRoomItems);
+            if (savedSelectedRoom != null && savedRoomItems.contains(savedSelectedRoom)) {
+                roomSelector.setValue(savedSelectedRoom);
+            } else {
+                roomSelector.setValue(savedRoomItems.get(0));
+            }
+        }
+
         chatContainer = new VBox(0);
         chatContainer.getStyleClass().add("chat-container");
         VBox.setVgrow(chatContainer, Priority.ALWAYS);
-        VBox.setVgrow(messageListView, Priority.ALWAYS);
-        chatContainer.getChildren().addAll(headerBox, messageListView);
+
+        // Create StackPane for message list and loading overlay
+        StackPane messagePane = new StackPane(messageListView, loadingOverlay);
+        VBox.setVgrow(messagePane, Priority.ALWAYS);
+
+        chatContainer.getChildren().addAll(headerBox, messagePane);
 
         setCenter(chatContainer);
 
@@ -1422,28 +1522,112 @@ public class ContentArea extends BorderPane {
             return;
 
         System.out.println("🔙 ContentArea.updateMessageAsRecalled called for messageId: " + messageId);
-        System.out.println("🔙 Current messageHistory size: " + messageHistory.size());
 
         Platform.runLater(() -> {
-            boolean updated = false;
+            // Update in messageHistory
+            boolean foundInHistory = false;
+            String recalledUser = null;
             for (MessageData data : messageHistory) {
-                System.out.println("🔍 Checking message: id=" + data.messageId + ", user=" + data.user + ", content="
-                        + data.message);
                 if (messageId.equals(data.messageId)) {
                     data.recalled = true;
-                    updated = true;
-                    System.out.println("✅ Found and updated message " + messageId + " as recalled");
+                    recalledUser = data.user;
+                    foundInHistory = true;
+                    System.out.println("✅ Found and updated message " + messageId + " as recalled in history");
+                    break;
                 }
             }
 
-            if (updated) {
-                System.out.println("🔄 Refreshing messages after recall update");
-                // Refresh the whole list because we need to rebuild the bubbles
+            // Find and update the message bubble directly in the UI
+            boolean foundInUI = findAndUpdateRecalledMessage(messageId, recalledUser);
+
+            if (!foundInUI && foundInHistory) {
+                // Fallback: only refresh if we couldn't update in place but message exists
+                System.out.println("⚠️ Could not find message " + messageId + " in UI, refreshing all");
                 refreshAllMessages();
-            } else {
+            } else if (!foundInHistory) {
                 System.out.println("⚠️ Message " + messageId + " NOT found in messageHistory!");
             }
         });
+    }
+
+    /**
+     * Find and update a recalled message directly in the UI without refreshing all
+     */
+    private boolean findAndUpdateRecalledMessage(Long messageId, String username) {
+        boolean isDarkMode = SettingsDialog.isDarkTheme();
+        String recalledText = (username != null ? username : "Người dùng") + " đã thu hồi tin nhắn";
+
+        for (HBox row : messageListView.getItems()) {
+            // Search for the message bubble with matching ID
+            if (findAndUpdateRecalledBubble(row, messageId, recalledText, isDarkMode)) {
+                System.out.println("✅ Updated message " + messageId + " to recalled state in UI");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Recursively find and update the bubble for a recalled message
+     */
+    private boolean findAndUpdateRecalledBubble(javafx.scene.Parent parent, Long messageId, String recalledText,
+            boolean isDarkMode) {
+        for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) {
+            // Check if this is a VBox that could be the bubble
+            if (child instanceof VBox bubble) {
+                // Check if this bubble has a reactionCountsBox with matching messageId
+                for (javafx.scene.Node bubbleChild : bubble.getChildren()) {
+                    if (bubbleChild instanceof HBox hbox && "reactionCountsBox".equals(hbox.getId())) {
+                        Object msgIdData = hbox.getUserData();
+                        if (msgIdData != null && msgIdData.equals(messageId)) {
+                            // Found the message! Update it to recalled state
+                            updateBubbleToRecalled(bubble, recalledText, isDarkMode);
+                            return true;
+                        }
+                    }
+                    // Also check for Label with message content that might have messageId stored
+                    if (bubbleChild instanceof Label label) {
+                        Object labelData = label.getUserData();
+                        if (labelData != null && labelData.equals(messageId)) {
+                            updateBubbleToRecalled(bubble, recalledText, isDarkMode);
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            // Recursively search in children
+            if (child instanceof javafx.scene.Parent parentChild) {
+                if (findAndUpdateRecalledBubble(parentChild, messageId, recalledText, isDarkMode)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Update a bubble's content to show recalled message
+     */
+    private void updateBubbleToRecalled(VBox bubble, String recalledText, boolean isDarkMode) {
+        // Clear existing content and replace with recalled message
+        bubble.getChildren().clear();
+
+        Label recalledLabel = new Label("🔙 " + recalledText);
+        recalledLabel.setWrapText(true);
+        recalledLabel.setMaxWidth(300);
+        recalledLabel.setStyle(
+                "-fx-font-size: 13px; " +
+                        "-fx-font-style: italic; " +
+                        "-fx-padding: 8 12; " +
+                        (isDarkMode ? "-fx-text-fill: #9ca3af;" : "-fx-text-fill: #6b7280;"));
+
+        bubble.getChildren().add(recalledLabel);
+        bubble.setStyle(
+                "-fx-background-color: " + (isDarkMode ? "#374151" : "#e5e7eb") + "; " +
+                        "-fx-background-radius: 16; " +
+                        "-fx-padding: 4 8; " +
+                        "-fx-opacity: 0.8;");
     }
 
     /**
@@ -1463,9 +1647,8 @@ public class ContentArea extends BorderPane {
                     if (content == null || (data.message != null && data.message.equals(content))) {
                         data.messageId = messageId;
                         System.out.println("✅ ContentArea: Updated local message with server ID: " + messageId);
-
-                        // Refresh to add recall context menu now that we have ID
-                        refreshAllMessages();
+                        // Don't refresh all messages - this causes flicker
+                        // The message history is updated, context menu will work when user right-clicks
                         break;
                     }
                 }
@@ -1580,48 +1763,51 @@ public class ContentArea extends BorderPane {
             return;
 
         System.out.println("😀 Refreshing reaction for message: " + messageId);
+        boolean isDarkMode = SettingsDialog.isDarkTheme();
 
         // Find the reactionCountsBox for this message in the ListView
         Platform.runLater(() -> {
-            for (HBox row : messageListView.getItems()) {
-                // Each row contains a StackPane (bubbleWrapper) which contains the message
-                // bubble
-                // The reactionCountsBox is stored as user data on the row
-                @SuppressWarnings("unchecked")
-                java.util.Map<Long, HBox> reactionBoxMap = (java.util.Map<Long, HBox>) row.getUserData();
+            boolean found = false;
 
-                if (reactionBoxMap == null) {
-                    // Try to find reactionCountsBox through the hierarchy
-                    // The row structure is: HBox (row) -> children -> StackPane (bubbleWrapper) ->
-                    // VBox (contentVBox) -> HBox (reactionCountsBox)
-                    for (javafx.scene.Node child : row.getChildren()) {
-                        if (child instanceof StackPane stackPane) {
-                            for (javafx.scene.Node stackChild : stackPane.getChildren()) {
-                                if (stackChild instanceof VBox vbox) {
-                                    for (javafx.scene.Node vboxChild : vbox.getChildren()) {
-                                        if (vboxChild instanceof HBox hbox
-                                                && "reactionCountsBox".equals(hbox.getId())) {
-                                            // Found it! Check if this is the right message
-                                            Object msgIdData = hbox.getUserData();
-                                            if (msgIdData != null && msgIdData.equals(messageId)) {
-                                                System.out.println("😀 Found reactionCountsBox for message " + messageId
-                                                        + " - refreshing!");
-                                                loadReactionCounts(messageId, hbox, true);
-                                                return;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            for (HBox row : messageListView.getItems()) {
+                // Search through the hierarchy to find reactionCountsBox with matching
+                // messageId
+                found = findAndRefreshReactionBox(row, messageId, isDarkMode);
+                if (found) {
+                    break;
                 }
             }
 
-            // If not found by traversing, just refresh all messages (fallback)
-            System.out.println("😀 Could not find specific reaction box, refreshing all messages");
-            refreshAllMessages();
+            if (!found) {
+                // Just log the issue - don't refresh all messages to avoid flicker
+                System.out.println("⚠️ Could not find reaction box for message " + messageId + " - skipping refresh");
+            }
         });
+    }
+
+    /**
+     * Recursively find and refresh reaction box for a specific message
+     */
+    private boolean findAndRefreshReactionBox(javafx.scene.Parent parent, Long messageId, boolean isDarkMode) {
+        for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) {
+            // Check if this is the reactionCountsBox we're looking for
+            if (child instanceof HBox hbox && "reactionCountsBox".equals(hbox.getId())) {
+                Object msgIdData = hbox.getUserData();
+                if (msgIdData != null && msgIdData.equals(messageId)) {
+                    System.out.println("😀 Found reactionCountsBox for message " + messageId + " - refreshing!");
+                    loadReactionCounts(messageId, hbox, isDarkMode);
+                    return true;
+                }
+            }
+
+            // Recursively search in children
+            if (child instanceof javafx.scene.Parent parentChild) {
+                if (findAndRefreshReactionBox(parentChild, messageId, isDarkMode)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // Custom cell for messages
