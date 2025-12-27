@@ -257,19 +257,15 @@ public class Sidebar extends VBox {
         Tab dmTab = new Tab("💬 DMs");
         dmTab.setContent(createDirectMessagesTab());
 
-        // Rooms Tab
-        Tab roomsTab = new Tab("🏠 Rooms");
+        // Rooms Tab (includes all public rooms automatically)
+        Tab roomsTab = new Tab("\uD83C\uDFE0 Rooms");
         roomsTab.setContent(createRoomsTab());
-
-        // Public Rooms Tab
-        Tab publicTab = new Tab("🌐 Public");
-        publicTab.setContent(createPublicRoomsTab());
 
         // Online Now Tab
         Tab onlineTab = new Tab("🟢 Online");
         onlineTab.setContent(createOnlineUsersTab());
 
-        sidebarTabs.getTabs().addAll(dmTab, roomsTab, publicTab, onlineTab);
+        sidebarTabs.getTabs().addAll(dmTab, roomsTab, onlineTab);
 
         tabbedContainer.getChildren().add(sidebarTabs);
         getChildren().add(tabbedContainer);
@@ -469,28 +465,36 @@ public class Sidebar extends VBox {
 
     /**
      * Add a public room dynamically (real-time update when room is created)
+     * Now adds to main roomsListView instead of separate publicRooms
      */
     public void addPublicRoom(Long roomId, String roomName, int memberCount) {
-        if (publicRoomsListView == null)
+        if (roomsListView == null)
             return;
-        String item = roomId + "|" + roomName + "|" + memberCount;
+        // Format: "roomId|roomName|isPrivate"
+        String item = roomId + "|" + roomName + "|false";
         // Check if already exists
-        boolean exists = publicRoomsListView.getItems().stream()
+        boolean exists = roomsListView.getItems().stream()
                 .anyMatch(i -> i.startsWith(roomId + "|"));
         if (!exists) {
-            publicRoomsListView.getItems().add(0, item); // Add to top
-            System.out.println("🏠 Added public room: " + roomName);
+            roomsListView.getItems().add(0, item); // Add to top
+            // Update count
+            int count = roomsListView.getItems().size();
+            roomsCountLabel.setText(String.valueOf(count));
+            System.out.println("🏠 Added public room to Rooms tab: " + roomName);
         }
     }
 
     /**
-     * Remove a public room dynamically (real-time update when room is deleted)
+     * Remove a room dynamically (real-time update when room is deleted)
      */
     public void removePublicRoom(Long roomId) {
-        if (publicRoomsListView == null)
+        if (roomsListView == null)
             return;
-        publicRoomsListView.getItems().removeIf(item -> item.startsWith(roomId + "|"));
-        System.out.println("🗑️ Removed public room: " + roomId);
+        roomsListView.getItems().removeIf(item -> item.startsWith(roomId + "|"));
+        // Update count
+        int count = roomsListView.getItems().size();
+        roomsCountLabel.setText(String.valueOf(count));
+        System.out.println("🗑️ Removed room from Rooms tab: " + roomId);
     }
 
     /**

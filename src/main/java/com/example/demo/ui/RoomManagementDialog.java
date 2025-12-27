@@ -214,7 +214,12 @@ public class RoomManagementDialog extends Stage {
         Tab membersTab = new Tab("👥 Thành viên", createMembersTab());
         membersTab.setClosable(false);
 
-        tabPane.getTabs().addAll(myRoomsTab, publicRoomsTab, createRoomTab, invitesTab, pendingInvitesTab, membersTab);
+        // Banned Members Tab
+        Tab bannedTab = new Tab("⛔ Bị cấm", createBannedMembersTab());
+        bannedTab.setClosable(false);
+
+        tabPane.getTabs().addAll(myRoomsTab, publicRoomsTab, createRoomTab, invitesTab, pendingInvitesTab, membersTab,
+                bannedTab);
         VBox.setVgrow(tabPane, Priority.ALWAYS);
 
         // Bottom buttons
@@ -480,6 +485,169 @@ public class RoomManagementDialog extends Stage {
         log.info("👥 Loaded {} members for room {}", members.size(), selectedRoom.getName());
     }
 
+    // ==================== BANNED MEMBERS TAB ====================
+
+    private ComboBox<ChatRoom> bannedRoomSelector;
+    private ListView<java.util.Map<String, Object>> bannedMembersList;
+
+    private VBox createBannedMembersTab() {
+        boolean isDark = SettingsDialog.isDarkTheme();
+        String textColor = isDark ? "#e2e8f0" : "#495057";
+        String bgColor = isDark ? "#374151" : "#f8f9fa";
+
+        VBox tabContent = new VBox(15);
+        tabContent.setPadding(new Insets(15));
+
+        // Room selector
+        Label selectLabel = new Label("Chọn phòng để xem danh sách bị cấm:");
+        selectLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + textColor + ";");
+
+        bannedRoomSelector = new ComboBox<>();
+        bannedRoomSelector.setPromptText("Chọn phòng...");
+        bannedRoomSelector.setPrefWidth(300);
+        bannedRoomSelector.setCellFactory(param -> new ListCell<ChatRoom>() {
+            @Override
+            protected void updateItem(ChatRoom room, boolean empty) {
+                super.updateItem(room, empty);
+                if (empty || room == null) {
+                    setText(null);
+                } else {
+                    setText(room.getName() + (room.isPrivate() ? " 🔒" : " 🌐"));
+                }
+            }
+        });
+        bannedRoomSelector.setButtonCell(new ListCell<ChatRoom>() {
+            @Override
+            protected void updateItem(ChatRoom room, boolean empty) {
+                super.updateItem(room, empty);
+                if (empty || room == null) {
+                    setText("Chọn phòng...");
+                } else {
+                    setText(room.getName() + (room.isPrivate() ? " 🔒" : " 🌐"));
+                }
+            }
+        });
+        bannedRoomSelector.setOnAction(e -> loadBannedMembers());
+
+        // Instructions
+        Label infoLabel = new Label("⛔ Click vào thành viên bị cấm và bấm nút Gỡ cấm để cho phép họ tham gia lại");
+        infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + (isDark ? "#9ca3af" : "#6c757d") + ";");
+
+        // Banned members list
+        bannedMembersList = new ListView<>();
+        bannedMembersList.setPrefHeight(250);
+        bannedMembersList.setCellFactory(param -> new BannedMemberCell());
+        VBox.setVgrow(bannedMembersList, Priority.ALWAYS);
+        bannedMembersList.setStyle("-fx-background-color: " + bgColor + "; -fx-background-radius: 12; " +
+                "-fx-border-radius: 12; -fx-border-color: " + (isDark ? "#4b5563" : "#e9ecef") + ";");
+        bannedMembersList.setPlaceholder(new Label("Chọn phòng để xem danh sách bị cấm"));
+
+        // Unban button
+        Button unbanButton = createBeautifulButton("✅", "Gỡ cấm", "#4ade80");
+        unbanButton.setDisable(true);
+        unbanButton.setOnAction(e -> {
+            var selected = bannedMembersList.getSelectionModel().getSelectedItem();
+            ChatRoom room = bannedRoomSelector.getValue();
+            if (selected != null && room != null) {
+                Long bannedUserId = ((Number) selected.get("userId")).longValue();
+                String username = (String) selected.get("username");
+                if (chatService.unbanMember(room.getId(), bannedUserId)) {
+                    showInfo("Gỡ cấm thành công", username + " đã được gỡ cấm và có thể tham gia phòng lại");
+                    loadBannedMembers();
+                } else {
+                    showError("Lỗi", "Không thể gỡ cấm thành viên");
+                }
+            }
+        });
+
+        bannedMembersList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            unbanButton.setDisable(newVal == null);
+        });
+
+        // Refresh button
+        Button refreshBtn = createBeautifulButton("🔄", "Làm mới", "#60a5fa");
+        refreshBtn.setOnAction(e -> loadBannedMembers());
+
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+        buttonBox.getChildren().addAll(unbanButton, refreshBtn);
+
+        tabContent.getChildren().addAll(selectLabel, bannedRoomSelector, infoLabel, bannedMembersList, buttonBox);
+        return tabContent;
+    }
+
+    private void loadBannedMembers() {
+        ChatRoom selectedRoom = bannedRoomSelector.getValue();
+        if (selectedRoom == null) {
+            bannedMembersList.getItems().clear();
+            return;
+        }
+
+        List<java.util.Map<String, Object>> bannedMembers = chatService.getBannedMembers(selectedRoom.getId());
+        bannedMembersList.getItems().clear();
+        bannedMembersList.getItems().addAll(bannedMembers);
+        log.info("⛔ Loaded {} banned members for room {}", bannedMembers.size(), selectedRoom.getName());
+    }
+
+    /**
+     * Custom cell for banned members list
+     */
+    private class BannedMemberCell extends ListCell<java.util.Map<String, Object>> {
+        @Override
+        protected void updateItem(java.util.Map<String, Object> banData, boolean empty) {
+            super.updateItem(banData, empty);
+            if (empty || banData == null) {
+                setGraphic(null);
+                return;
+            }
+
+            boolean isDark = SettingsDialog.isDarkTheme();
+
+            String username = (String) banData.get("username");
+            String displayName = banData.get("displayName") != null ? (String) banData.get("displayName") : username;
+            String reason = banData.get("reason") != null ? (String) banData.get("reason") : "Không có lý do";
+            String bannedAt = banData.get("bannedAt") != null ? banData.get("bannedAt").toString() : "";
+
+            HBox container = new HBox(12);
+            container.setAlignment(Pos.CENTER_LEFT);
+            container.setPadding(new Insets(10, 15, 10, 15));
+            container.setStyle("-fx-background-color: " + (isDark ? "#374151" : "#ffffff") + "; " +
+                    "-fx-background-radius: 10; -fx-border-color: " + (isDark ? "#4b5563" : "#e9ecef") + "; " +
+                    "-fx-border-radius: 10;");
+
+            // Avatar
+            Circle avatar = new Circle(20);
+            int colorIndex = Math.abs(username.hashCode()) % AVATAR_COLORS.length;
+            avatar.setFill(AVATAR_COLORS[colorIndex]);
+            String initial = displayName.length() > 0 ? displayName.substring(0, 1).toUpperCase() : "?";
+            Label initialLabel = new Label(initial);
+            initialLabel.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 14px;");
+            StackPane avatarPane = new StackPane(avatar, initialLabel);
+            avatarPane.setMinSize(40, 40);
+            avatarPane.setMaxSize(40, 40);
+
+            // User info
+            VBox infoBox = new VBox(2);
+            Label nameLabel = new Label("⛔ " + displayName);
+            nameLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 14px; -fx-text-fill: " +
+                    (isDark ? "#f1f5f9" : "#212529") + ";");
+            Label usernameLabel = new Label("@" + username);
+            usernameLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + (isDark ? "#9ca3af" : "#6c757d") + ";");
+            Label reasonLabel = new Label("Lý do: " + reason);
+            reasonLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #ef4444;");
+            infoBox.getChildren().addAll(nameLabel, usernameLabel, reasonLabel);
+            HBox.setHgrow(infoBox, Priority.ALWAYS);
+
+            // Banned badge
+            Label badge = new Label("BỊ CẤM");
+            badge.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; " +
+                    "-fx-padding: 4 10; -fx-background-radius: 12; -fx-font-size: 10px; -fx-font-weight: bold;");
+
+            container.getChildren().addAll(avatarPane, infoBox, badge);
+            setGraphic(container);
+        }
+    }
+
     /**
      * Custom cell for members list with role display and admin actions
      */
@@ -630,6 +798,28 @@ public class RoomManagementDialog extends Stage {
                             }
                         });
                         contextMenu.getItems().add(kickItem);
+
+                        // Create beautiful ban button (permanent ban)
+                        HBox banBox = RoomManagementDialog.this.createStyledMenuItem("⛔ Cấm vĩnh viễn", "#991b1b",
+                                true);
+                        CustomMenuItem banItem = new CustomMenuItem(banBox);
+                        banItem.setHideOnClick(true);
+                        banItem.setOnAction(e -> {
+                            // Show confirmation dialog with reason input
+                            javafx.scene.control.TextInputDialog dialog = new javafx.scene.control.TextInputDialog();
+                            dialog.setTitle("Cấm thành viên");
+                            dialog.setHeaderText("Cấm " + displayName + " khỏi phòng vĩnh viễn");
+                            dialog.setContentText("Lý do (tùy chọn):");
+                            dialog.showAndWait().ifPresent(reason -> {
+                                if (chatService.banMember(selectedRoom.getId(), userId, reason)) {
+                                    showInfo("Đã cấm", displayName + " đã bị cấm khỏi phòng vĩnh viễn");
+                                    loadMembersForRoom();
+                                } else {
+                                    showError("Lỗi", "Không thể cấm thành viên");
+                                }
+                            });
+                        });
+                        contextMenu.getItems().add(banItem);
                     }
                 }
 
@@ -644,9 +834,11 @@ public class RoomManagementDialog extends Stage {
     }
 
     private void loadData() {
-        // Load my rooms - filter out auto-created private chat rooms
+        // Load my rooms - only rooms where I am the OWNER
+        Long currentUserId = chatService.getCurrentUserId();
         List<ChatRoom> myRooms = chatService.getMyRooms().stream()
                 .filter(room -> room.getName() == null || !room.getName().startsWith("PRIVATE_"))
+                .filter(room -> room.getOwnerId() != null && room.getOwnerId().equals(currentUserId))
                 .collect(java.util.stream.Collectors.toList());
         myRoomsList.getItems().clear();
         myRoomsList.getItems().addAll(myRooms);
@@ -659,13 +851,17 @@ public class RoomManagementDialog extends Stage {
         publicRoomsList.getItems().clear();
         publicRoomsList.getItems().addAll(publicRooms);
 
-        // Load rooms for invite selector (exclude auto-created private rooms)
+        // Load rooms for invite selector (only private rooms - public rooms don't need
+        // invites)
+        List<ChatRoom> privateRooms = myRooms.stream()
+                .filter(ChatRoom::isPrivate)
+                .collect(java.util.stream.Collectors.toList());
         inviteRoomSelector.getItems().clear();
-        inviteRoomSelector.getItems().addAll(myRooms);
+        inviteRoomSelector.getItems().addAll(privateRooms);
 
-        if (!myRooms.isEmpty()) {
-            inviteRoomSelector.setValue(myRooms.get(0));
-            loadAvailableFriends(myRooms.get(0).getId());
+        if (!privateRooms.isEmpty()) {
+            inviteRoomSelector.setValue(privateRooms.get(0));
+            loadAvailableFriends(privateRooms.get(0).getId());
         }
 
         // Load pending room invites
@@ -679,6 +875,12 @@ public class RoomManagementDialog extends Stage {
         if (membersRoomSelector != null) {
             membersRoomSelector.getItems().clear();
             membersRoomSelector.getItems().addAll(myRooms);
+        }
+
+        // Load rooms for banned members management selector
+        if (bannedRoomSelector != null) {
+            bannedRoomSelector.getItems().clear();
+            bannedRoomSelector.getItems().addAll(myRooms);
         }
     }
 

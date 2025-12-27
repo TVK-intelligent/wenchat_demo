@@ -59,6 +59,10 @@ public class ContentArea extends BorderPane {
     private VBox chatContainer;
     private StackPane loadingOverlay;
 
+    // Typing indicator
+    private Label typingLabel;
+    private java.util.concurrent.ScheduledExecutorService typingResetScheduler;
+
     // Callbacks
     @Setter
     private Consumer<Void> onBackToRoomClicked;
@@ -167,11 +171,21 @@ public class ContentArea extends BorderPane {
         loadingOverlay.setVisible(false);
         loadingOverlay.setManaged(false);
 
+        // ⌨️ Create typing indicator label
+        typingLabel = new Label();
+        typingLabel.setStyle(
+                "-fx-font-size: 12px; " +
+                        "-fx-text-fill: #64748b; " +
+                        "-fx-font-style: italic; " +
+                        "-fx-padding: 4 20 4 20;");
+        typingLabel.setVisible(false);
+        typingLabel.setManaged(false);
+
         // Use StackPane to layer messageListView and loading overlay
         StackPane messagePane = new StackPane(messageListView, loadingOverlay);
         VBox.setVgrow(messagePane, Priority.ALWAYS);
 
-        chatContainer.getChildren().addAll(header, messagePane);
+        chatContainer.getChildren().addAll(header, messagePane, typingLabel);
 
         setCenter(chatContainer);
     }
@@ -909,6 +923,44 @@ public class ContentArea extends BorderPane {
             statusLabel.setText("Offline - Mất kết nối");
             statusLabel.setStyle("-fx-text-fill: #dc3545; -fx-font-size: 12px;");
         }
+    }
+
+    /**
+     * ⌨️ Show or hide typing indicator
+     * 
+     * @param username Username of person typing (null to hide)
+     * @param isTyping true to show, false to hide
+     */
+    public void showTypingIndicator(String username, boolean isTyping) {
+        Platform.runLater(() -> {
+            if (typingLabel == null)
+                return;
+
+            if (isTyping && username != null) {
+                typingLabel.setText("⌨️ " + username + " đang gõ...");
+                typingLabel.setVisible(true);
+                typingLabel.setManaged(true);
+
+                // Auto-hide after 3 seconds if no more typing events
+                if (typingResetScheduler != null) {
+                    typingResetScheduler.shutdownNow();
+                }
+                typingResetScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+                typingResetScheduler.schedule(() -> {
+                    Platform.runLater(() -> {
+                        typingLabel.setVisible(false);
+                        typingLabel.setManaged(false);
+                    });
+                }, 3, java.util.concurrent.TimeUnit.SECONDS);
+            } else {
+                typingLabel.setVisible(false);
+                typingLabel.setManaged(false);
+                if (typingResetScheduler != null) {
+                    typingResetScheduler.shutdownNow();
+                    typingResetScheduler = null;
+                }
+            }
+        });
     }
 
     public void addFileMessage(Long messageId, String user, String fileName, String fileUrl, LocalDateTime timestamp,

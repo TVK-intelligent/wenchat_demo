@@ -46,6 +46,7 @@ import com.example.demo.client.model.ChatMessage;
 import com.example.demo.client.model.FriendRequestNotification;
 import com.example.demo.client.model.RoomInviteNotification;
 import com.example.demo.client.model.RecallResponse;
+import com.example.demo.client.model.TypingIndicator;
 
 /**
  * 🚀 WebChat Group 10 Desktop Client - JavaFX Application
@@ -220,6 +221,7 @@ public class ChatClientFXApp extends Application {
                 if (webSocketClient != null && webSocketClient.isConnected()) {
                     webSocketClient.subscribeToRoom(roomId, this::handleIncomingMessage);
                     webSocketClient.subscribeToRoomRecall(roomId, this::handleMessageRecall);
+                    webSocketClient.subscribeToRoomTyping(roomId, this::handleTypingIndicator);
                     log.info("✅ Subscribed to newly joined room: {}", roomId);
                 }
 
@@ -319,6 +321,7 @@ public class ChatClientFXApp extends Application {
         });
         dialog.setOnBadgeUpdate(() -> {
             loadInitialBadgeCounts(); // Reload badge counts when accept/decline
+            loadRooms(); // Reload Sidebar rooms after accept/decline invite
         });
         dialog.showAndWait();
     }
@@ -815,11 +818,27 @@ public class ChatClientFXApp extends Application {
 
     private void loadRooms() {
         try {
-            // Load rooms from ChatService - filter out auto-created private chat rooms
-            // (PRIVATE_*)
-            loadedRooms = chatService.getMyRooms().stream()
+            // Load my rooms (joined rooms)
+            List<ChatRoom> myRooms = chatService.getMyRooms().stream()
                     .filter(room -> room.getName() == null || !room.getName().startsWith("PRIVATE_"))
                     .collect(java.util.stream.Collectors.toList());
+
+            // Load all public rooms
+            List<ChatRoom> publicRooms = chatService.getPublicRooms();
+
+            // Merge: start with my rooms, then add public rooms not already joined
+            java.util.Set<Long> myRoomIds = myRooms.stream()
+                    .map(ChatRoom::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+
+            List<ChatRoom> allRooms = new ArrayList<>(myRooms);
+            for (ChatRoom publicRoom : publicRooms) {
+                if (!myRoomIds.contains(publicRoom.getId())) {
+                    allRooms.add(publicRoom);
+                }
+            }
+
+            loadedRooms = allRooms;
             if (loadedRooms != null && !loadedRooms.isEmpty()) {
                 // Load rooms into sidebar
                 sidebar.loadRoomsFromChatRooms(loadedRooms);
@@ -833,6 +852,8 @@ public class ChatClientFXApp extends Application {
                         webSocketClient.subscribeToRoom(room.getId(), this::handleIncomingMessage);
                         // Subscribe to room recall notifications
                         webSocketClient.subscribeToRoomRecall(room.getId(), this::handleMessageRecall);
+                        // Subscribe to typing indicator
+                        webSocketClient.subscribeToRoomTyping(room.getId(), this::handleTypingIndicator);
                         log.info("✅ Subscribed to room for notifications: {} (ID: {})", room.getName(), room.getId());
                     }
 
@@ -860,21 +881,26 @@ public class ChatClientFXApp extends Application {
             // Subscribe to room events for real-time updates
             if (webSocketClient != null && webSocketClient.isConnected()) {
                 webSocketClient.subscribeToRoomEvents(event -> {
+                    log.info("📢 ROOM EVENT RECEIVED: {}", event);
                     Platform.runLater(() -> {
                         String eventType = (String) event.get("type");
+                        log.info("📢 Event type: {}", eventType);
                         if ("ROOM_CREATED".equals(eventType)) {
                             @SuppressWarnings("unchecked")
                             java.util.Map<String, Object> roomData = (java.util.Map<String, Object>) event.get("room");
+                            log.info("📢 Room data: {}", roomData);
                             if (roomData != null) {
                                 Boolean isPrivate = (Boolean) roomData.get("private");
+                                log.info("📢 isPrivate: {}", isPrivate);
                                 if (isPrivate == null || !isPrivate) { // Only add public rooms
                                     Long roomId = ((Number) roomData.get("id")).longValue();
                                     String roomName = (String) roomData.get("name");
                                     Integer memberCount = roomData.get("memberCount") != null
                                             ? ((Number) roomData.get("memberCount")).intValue()
                                             : 0;
+                                    log.info("📢 Adding public room: {} (ID: {})", roomName, roomId);
                                     sidebar.addPublicRoom(roomId, roomName, memberCount);
-                                    log.info("🏠 New public room added: {} (ID: {})", roomName, roomId);
+                                    log.info("🏠 New public room added to Rooms tab: {} (ID: {})", roomName, roomId);
                                 }
                             }
                         } else if ("ROOM_DELETED".equals(eventType)) {
@@ -888,6 +914,53 @@ public class ChatClientFXApp extends Application {
                     });
                 });
                 log.info("✅ Subscribed to room events for real-time updates");
+
+                // 🚫 Subscribe to ban notifications
+                Long currentUserId = chatService.getCurrentUserId();
+                webSocketClient.subscribeToBannedNotifications(currentUserId, event -> {
+                    Platform.runLater(() -> {
+                        String eventType = (String) event.get("type");
+                        if ("BANNED_FROM_ROOM".equals(eventType)) {
+                            Long roomId = ((Number) event.get("roomId")).longValue();
+                            String roomName = (String) event.get("roomName");
+                            String reason = (String) event.get("reason");
+
+                            log.info("🚫 You were banned from room: {} (ID: {})", roomName, roomId);
+
+                            // Remove room from sidebar
+                            sidebar.removePublicRoom(roomId);
+
+                            // Also remove from loadedRooms
+                            if (loadedRooms != null) {
+                                loadedRooms.removeIf(room -> room.getId().equals(roomId));
+                                sidebar.loadRoomsFromChatRooms(loadedRooms);
+                            }
+
+                            // If currently viewing this room, switch to another
+                            if (currentRoomId != null && currentRoomId.equals(roomId)) {
+                                currentRoomId = null;
+                                contentArea.clearMessages();
+                                appendMessage("⚠️ Bạn đã bị cấm khỏi phòng này.");
+                            }
+
+                            // Show alert to user
+                            appendMessage("🚫 Bạn đã bị cấm khỏi phòng \"" + roomName + "\". Lý do: " + reason);
+                        } else if ("UNBANNED_FROM_ROOM".equals(eventType)) {
+                            Long roomId = ((Number) event.get("roomId")).longValue();
+                            String roomName = (String) event.get("roomName");
+
+                            log.info("✅ You were unbanned from room: {} (ID: {})", roomName, roomId);
+
+                            // Reload rooms to show the room again
+                            loadRooms();
+
+                            // Show alert to user
+                            appendMessage(
+                                    "✅ Bạn đã được gỡ cấm khỏi phòng \"" + roomName + "\". Bạn có thể tham gia lại!");
+                        }
+                    });
+                });
+                log.info("✅ Subscribed to ban notifications");
             }
 
         } catch (Exception e) {
@@ -1292,6 +1365,30 @@ public class ChatClientFXApp extends Application {
     }
 
     /**
+     * ⌨️ Handle typing indicator from other users
+     */
+    private void handleTypingIndicator(TypingIndicator indicator) {
+        if (indicator == null || indicator.getRoomId() == null) {
+            return;
+        }
+
+        // Only show if it's the current room
+        if (!indicator.getRoomId().equals(currentRoomId)) {
+            return;
+        }
+
+        // Ignore own typing
+        if (indicator.getUserId() != null && indicator.getUserId().equals(currentUserId)) {
+            return;
+        }
+
+        Platform.runLater(() -> {
+            String username = indicator.getUsername() != null ? indicator.getUsername() : "Someone";
+            contentArea.showTypingIndicator(username, indicator.isTyping());
+        });
+    }
+
+    /**
      * Handle friend request notification - handles new requests, accepts, and
      * removals
      */
@@ -1508,15 +1605,12 @@ public class ChatClientFXApp extends Application {
                                 // My private room - refresh my rooms list
                                 log.info("🔒 My private room created: {}, refreshing my rooms...", roomName);
                                 loadRooms();
-                                appendMessage("� Phòng riêng tư mới được tạo: " + roomName);
+                                appendMessage("🔒 Phòng riêng tư mới được tạo: " + roomName);
                             }
                         } else {
-                            // Public room created
-                            log.info("�🌐 New public room created: {}, refreshing list...", roomName);
-                            loadPublicRooms();
-                            if (isMyRoom) {
-                                loadRooms(); // Also refresh my rooms if I'm the owner
-                            }
+                            // Public room created - refresh Sidebar Rooms tab
+                            log.info("🌐 New public room created: {}, refreshing Rooms tab...", roomName);
+                            loadRooms(); // This updates Sidebar Rooms tab!
                             appendMessage("🆕 Phòng mới được tạo: " + roomName);
                         }
                     }

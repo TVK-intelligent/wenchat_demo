@@ -357,14 +357,80 @@ public class WebSocketClient {
             return;
         try {
             TypingIndicator indicator = new TypingIndicator();
+            indicator.setUserId(currentUserId);
+            indicator.setUsername(currentUsername);
             indicator.setRoomId(roomId);
             indicator.setTyping(typing);
 
-            String destination = "/app/typing/" + roomId;
+            String destination = "/app/typing/room/" + roomId;
             String json = objectMapper.writeValueAsString(indicator);
             stompSession.send(destination, json.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         } catch (Exception e) {
             // silent
+        }
+    }
+
+    /**
+     * ⌨️ Subscribe to room typing indicators
+     * 
+     * @param roomId   Room ID to subscribe
+     * @param callback Called when someone types in the room
+     */
+    public void subscribeToRoomTyping(Long roomId, Consumer<TypingIndicator> callback) {
+        if (stompSession == null || !connected)
+            return;
+
+        String destination = "/topic/typing/room/" + roomId;
+        String subscriptionName = "room-typing-" + roomId;
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to typing for room {}", roomId);
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    TypingIndicator indicator = parsePayload(payload, TypingIndicator.class);
+                    if (indicator != null && callback != null) {
+                        // Ignore my own typing (already shown locally)
+                        if (indicator.getUserId() != null && !indicator.getUserId().equals(currentUserId)) {
+                            log.info("⌨️ Typing indicator from {} (typing={})",
+                                    indicator.getUsername(), indicator.isTyping());
+                            callback.accept(indicator);
+                        }
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("✅ Subscribed to room typing: {}", destination);
+        } catch (Exception e) {
+            log.error("Failed to subscribe to room typing: " + e.getMessage());
+        }
+    }
+
+    /**
+     * ⌨️ Unsubscribe from room typing indicators
+     */
+    public void unsubscribeFromRoomTyping(Long roomId) {
+        String subscriptionName = "room-typing-" + roomId;
+        StompSession.Subscription subscription = subscriptionIds.get(subscriptionName);
+        if (subscription != null) {
+            try {
+                subscription.unsubscribe();
+                subscriptionIds.remove(subscriptionName);
+                log.info("Unsubscribed from room typing for room: {}", roomId);
+            } catch (Exception e) {
+                log.error("Unsubscribe from room typing failed: " + e.getMessage());
+            }
         }
     }
 
@@ -859,8 +925,12 @@ public class WebSocketClient {
      * deleted
      */
     public void subscribeToRoomEvents(Consumer<Map<String, Object>> callback) {
-        if (stompSession == null || !connected)
+        log.info("📢 subscribeToRoomEvents called, stompSession={}, connected={}",
+                stompSession != null, connected);
+        if (stompSession == null || !connected) {
+            log.warn("⚠️ Cannot subscribe to room events - not connected!");
             return;
+        }
 
         String destination = "/topic/rooms";
         String subscriptionName = "room-events";
@@ -898,6 +968,54 @@ public class WebSocketClient {
             log.info("✅ Subscribed to room events (/topic/rooms)");
         } catch (Exception e) {
             log.error("Failed to subscribe to room events: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🚫 Subscribe to ban notifications for the current user
+     * When the user is banned from a room, they receive a notification to remove
+     * the room
+     */
+    public void subscribeToBannedNotifications(Long userId, Consumer<Map<String, Object>> callback) {
+        if (stompSession == null || !connected)
+            return;
+
+        String destination = "/topic/user/" + userId + "/banned";
+        String subscriptionName = "banned-notifications";
+
+        if (subscriptionIds.containsKey(subscriptionName)) {
+            log.debug("Already subscribed to {}", subscriptionName);
+            return;
+        }
+
+        try {
+            StompSession.Subscription subscription = stompSession.subscribe(destination, new StompFrameHandler() {
+                @Override
+                @NonNull
+                public Type getPayloadType(@NonNull StompHeaders headers) {
+                    return byte[].class;
+                }
+
+                @Override
+                @SuppressWarnings("unchecked")
+                public void handleFrame(@NonNull StompHeaders headers, @Nullable Object payload) {
+                    try {
+                        Map<String, Object> event = parsePayload(payload, Map.class);
+                        if (event != null) {
+                            String eventType = (String) event.get("type");
+                            log.info("🚫 Received ban notification: {}", eventType);
+                            callback.accept(event);
+                        }
+                    } catch (Exception e) {
+                        log.error("Error parsing ban notification: {}", e.getMessage());
+                    }
+                }
+            });
+
+            subscriptionIds.put(subscriptionName, subscription);
+            log.info("✅ Subscribed to ban notifications ({})", destination);
+        } catch (Exception e) {
+            log.error("Failed to subscribe to ban notifications: " + e.getMessage());
         }
     }
 

@@ -1082,6 +1082,69 @@ public class ChatService {
         }
     }
 
+    // ==================== BAN MANAGEMENT API ====================
+
+    /**
+     * 🚫 Ban a member from a room (owner or admin only)
+     */
+    public boolean banMember(Long roomId, Long userId, String reason) {
+        try {
+            String endpoint = "/api/rooms/" + roomId + "/bans/" + userId;
+            if (reason != null && !reason.isEmpty()) {
+                endpoint += "?reason=" + java.net.URLEncoder.encode(reason, "UTF-8");
+            }
+            post(endpoint, "{}", true);
+            log.info("🚫 User {} banned from room {}", userId, roomId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to ban member: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * ✅ Unban a member from a room (owner or admin only)
+     */
+    public boolean unbanMember(Long roomId, Long userId) {
+        try {
+            delete("/api/rooms/" + roomId + "/bans/" + userId, true);
+            log.info("✅ User {} unbanned from room {}", userId, roomId);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to unban member: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 🔍 Check if a user is banned from a room
+     */
+    public boolean isBanned(Long roomId, Long userId) {
+        try {
+            String response = get("/api/rooms/" + roomId + "/bans/" + userId, true);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = objectMapper.readValue(response, Map.class);
+            return Boolean.TRUE.equals(result.get("isBanned"));
+        } catch (Exception e) {
+            log.error("Failed to check ban status: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 📋 Get banned members list for a room
+     */
+    public List<Map<String, Object>> getBannedMembers(Long roomId) {
+        try {
+            String response = get("/api/rooms/" + roomId + "/bans", true);
+            return objectMapper.readValue(response,
+                    TypeFactory.defaultInstance().constructCollectionType(List.class, Map.class));
+        } catch (Exception e) {
+            log.error("Failed to get banned members: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
     /**
      * 👥 Get room members with their roles
      */
