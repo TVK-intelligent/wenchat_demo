@@ -940,11 +940,10 @@ public class ChatClientFXApp extends Application {
                             if (currentRoomId != null && currentRoomId.equals(roomId)) {
                                 currentRoomId = null;
                                 contentArea.clearMessages();
-                                appendMessage("⚠️ Bạn đã bị cấm khỏi phòng này.");
                             }
 
-                            // Show alert to user
-                            appendMessage("🚫 Bạn đã bị cấm khỏi phòng \"" + roomName + "\". Lý do: " + reason);
+                            // Show toast or desktop notification
+                            notificationService.showBanNotification(roomName, reason);
                         } else if ("UNBANNED_FROM_ROOM".equals(eventType)) {
                             Long roomId = ((Number) event.get("roomId")).longValue();
                             String roomName = (String) event.get("roomName");
@@ -954,9 +953,8 @@ public class ChatClientFXApp extends Application {
                             // Reload rooms to show the room again
                             loadRooms();
 
-                            // Show alert to user
-                            appendMessage(
-                                    "✅ Bạn đã được gỡ cấm khỏi phòng \"" + roomName + "\". Bạn có thể tham gia lại!");
+                            // Show toast or desktop notification
+                            notificationService.showUnbanNotification(roomName);
                         }
                     });
                 });

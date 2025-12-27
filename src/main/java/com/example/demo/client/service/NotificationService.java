@@ -436,6 +436,117 @@ public class NotificationService {
     }
 
     /**
+     * Show ban notification - shows toast or desktop based on focus
+     */
+    public void showBanNotification(String roomName, String reason) {
+        String title = "🚫 Bị cấm khỏi phòng";
+        String message = "Bạn đã bị cấm khỏi \"" + roomName + "\". Lý do: " + reason;
+
+        if (soundEnabled && globalEnabled) {
+            playNotificationSound(NotificationType.ROOM_INVITE); // Reuse sound
+        }
+
+        if (windowFocused) {
+            showInAppToast(title, message);
+        } else {
+            showDesktopNotification(title, message);
+        }
+    }
+
+    /**
+     * Show unban notification - shows toast or desktop based on focus
+     */
+    public void showUnbanNotification(String roomName) {
+        String title = "✅ Được gỡ cấm";
+        String message = "Bạn đã được gỡ cấm khỏi phòng \"" + roomName + "\". Bạn có thể tham gia lại!";
+
+        if (soundEnabled && globalEnabled) {
+            playNotificationSound(NotificationType.ROOM_INVITE);
+        }
+
+        if (windowFocused) {
+            showInAppToast(title, message);
+        } else {
+            showDesktopNotification(title, message);
+        }
+    }
+
+    /**
+     * Show kick notification - shows toast or desktop based on focus
+     */
+    public void showKickNotification(String roomName, String reason) {
+        String title = "⚠️ Bị kick khỏi phòng";
+        String message = "Bạn đã bị kick khỏi \"" + roomName + "\"" +
+                (reason != null && !reason.isEmpty() ? ". Lý do: " + reason : "");
+
+        if (soundEnabled && globalEnabled) {
+            playNotificationSound(NotificationType.ROOM_INVITE);
+        }
+
+        if (windowFocused) {
+            showInAppToast(title, message);
+        } else {
+            showDesktopNotification(title, message);
+        }
+    }
+
+    /**
+     * Show friend request accepted notification
+     */
+    public void showFriendAcceptedNotification(String friendName) {
+        String title = "✅ Kết bạn thành công";
+        String message = friendName + " đã chấp nhận lời mời kết bạn của bạn";
+
+        if (soundEnabled && globalEnabled) {
+            playNotificationSound(NotificationType.FRIEND_REQUEST);
+        }
+
+        if (windowFocused) {
+            showInAppToast(title, message);
+        } else {
+            showDesktopNotification(title, message);
+        }
+    }
+
+    /**
+     * Helper method to show desktop notification without checking focus
+     */
+    private void showDesktopNotification(String title, String message) {
+        if (!globalEnabled) {
+            return;
+        }
+
+        if (traySupported && trayIcon != null) {
+            try {
+                if (systemTray != null) {
+                    try {
+                        systemTray.remove(trayIcon);
+                    } catch (Exception ignored) {
+                    }
+                    systemTray.add(trayIcon);
+                }
+
+                Platform.runLater(() -> {
+                    trayIcon.displayMessage(title, message, MessageType.INFO);
+                });
+
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(5000);
+                        if (systemTray != null && trayIcon != null) {
+                            systemTray.remove(trayIcon);
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }).start();
+
+            } catch (Exception e) {
+                log.error("Failed to show desktop notification: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
      * Show an in-app toast notification (when window is focused)
      * This creates a small popup inside the application
      */
