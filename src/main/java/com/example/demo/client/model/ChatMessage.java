@@ -30,7 +30,7 @@ public class ChatMessage {
     private boolean read; // Track if message is read by current user
 
     public enum MessageType {
-        TEXT, IMAGE, FILE, TYPING, NOTIFICATION, SYSTEM
+        TEXT, IMAGE, FILE, TYPING, NOTIFICATION, SYSTEM, VOICE
     }
 
     @Override

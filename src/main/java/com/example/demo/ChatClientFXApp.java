@@ -101,6 +101,7 @@ public class ChatClientFXApp extends Application {
             contentArea.getInputField().setOnAction(e -> sendMessage());
             contentArea.getSendButton().setOnAction(e -> sendMessage());
             contentArea.getFileButton().setOnAction(e -> sendFile());
+            contentArea.setOnVoiceSendClicked(this::sendVoiceMessage);
 
             // Create sidebar
             sidebar = new Sidebar();
@@ -1273,6 +1274,65 @@ public class ChatClientFXApp extends Application {
         }
     }
 
+    /**
+     * 🎤 Send voice message
+     */
+    private void sendVoiceMessage(File voiceFile) {
+        if (voiceFile == null || !voiceFile.exists()) {
+            log.warn("🎤 Voice file is null or doesn't exist");
+            return;
+        }
+
+        try {
+            if (webSocketClient != null && webSocketClient.isConnected()) {
+                log.info("🎤 Sending voice message: {}", voiceFile.getName());
+
+                // Check if we're in private chat mode
+                if (contentArea.isPrivateMode() && contentArea.getPrivateChatUser() != null) {
+                    // PRIVATE CHAT VOICE MESSAGE
+                    com.example.demo.client.model.User privateChatUser = contentArea.getPrivateChatUser();
+
+                    // Upload voice file to private endpoint
+                    String voiceUrl = chatService.uploadPrivateFile(
+                            privateChatUser.getId(),
+                            voiceFile.getAbsolutePath());
+
+                    if (voiceUrl != null && !voiceUrl.isEmpty()) {
+                        appendMessage("🎤 Đã gửi tin nhắn thoại");
+                        log.info("🎤 Sent private voice message to user {}", privateChatUser.getId());
+                    } else {
+                        appendMessage("❌ Lỗi gửi tin nhắn thoại");
+                    }
+                } else if (currentRoomId != null) {
+                    // ROOM CHAT VOICE MESSAGE
+                    String voiceUrl = chatService.uploadFile(currentRoomId, voiceFile.getAbsolutePath());
+
+                    if (voiceUrl != null) {
+                        appendMessage("🎤 Đã gửi tin nhắn thoại");
+                        log.info("🎤 Sent room voice message to room {}", currentRoomId);
+                    } else {
+                        appendMessage("❌ Lỗi gửi tin nhắn thoại");
+                    }
+                } else {
+                    contentArea.addMessage("System", "❌ Chưa chọn phòng hoặc người nhận",
+                            java.time.LocalDateTime.now());
+                }
+            } else {
+                contentArea.addMessage("System", "❌ Chưa kết nối đến server",
+                        java.time.LocalDateTime.now());
+            }
+        } catch (Exception e) {
+            log.error("🎤 Error sending voice message: {}", e.getMessage());
+            contentArea.addMessage("System", "❌ Lỗi gửi tin nhắn thoại: " + e.getMessage(),
+                    java.time.LocalDateTime.now());
+        } finally {
+            // Clean up temp file
+            if (voiceFile.exists()) {
+                voiceFile.delete();
+            }
+        }
+    }
+
     private void handleIncomingMessage(com.example.demo.client.model.ChatMessage message) {
         if (message != null && message.getRoomId() != null) {
             // Check if message already exists (prevent duplicates/handle updates)
@@ -1307,6 +1367,11 @@ public class ChatClientFXApp extends Application {
                     if (message.isRecalled()) {
                         contentArea.addMessage(message.getId(), displayName, null, message.getTimestamp(), isMine,
                                 true);
+                    } else if (message.getMessageType() == ChatMessage.MessageType.VOICE) {
+                        // 🎤 Voice message
+                        contentArea.addVoiceMessage(message.getId(), displayName, message.getContent(),
+                                0, // Duration will be determined from audio file
+                                message.getTimestamp(), isMine, false);
                     } else if (message.getMessageType() == ChatMessage.MessageType.FILE) {
                         contentArea.addFileMessage(message.getId(), displayName, message.getFileName(),
                                 message.getContent(),

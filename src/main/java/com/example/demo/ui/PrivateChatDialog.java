@@ -4,6 +4,7 @@ import com.example.demo.client.model.ChatMessage;
 import com.example.demo.client.model.RecallResponse;
 import com.example.demo.client.model.User;
 import com.example.demo.client.service.ChatService;
+import com.example.demo.client.util.VoiceRecorder;
 import com.example.demo.client.websocket.WebSocketClient;
 import javafx.animation.FadeTransition;
 import javafx.animation.Interpolator;
@@ -48,8 +49,16 @@ public class PrivateChatDialog extends Stage {
     private TextField inputField;
     private Button sendButton;
     private Button fileButton;
+    private Button voiceButton;
+    private Button emojiButton;
     private Label statusLabel;
     private Circle onlineIndicator;
+
+    // Voice recording
+    private VoiceRecorder voiceRecorder;
+    private boolean isVoiceRecording = false;
+    private HBox recordingIndicator;
+    private Label recordingTimeLabel;
 
     // Message storage
     private List<ChatMessage> privateMessages = new ArrayList<>();
@@ -121,12 +130,52 @@ public class PrivateChatDialog extends Stage {
         sendButton.setMinHeight(45);
         sendButton.setMaxHeight(45);
 
-        fileButton = Sidebar.createBeautifulButton("📎", "", "#f0f2f5");
-        fileButton.setMinWidth(40);
-        fileButton.setMaxWidth(40);
-        fileButton.setMinHeight(40);
-        fileButton.setMaxHeight(40);
-        fileButton.setStyle(fileButton.getStyle() + "-fx-text-fill: #667eea;");
+        // Emoji button - YELLOW/ORANGE
+        emojiButton = new Button("😊");
+        emojiButton.setStyle(
+                "-fx-background-color: #f59e0b; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;");
+        emojiButton.setOnMouseEntered(e -> emojiButton.setStyle(
+                "-fx-background-color: #d97706; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;"));
+        emojiButton.setOnMouseExited(e -> emojiButton.setStyle(
+                "-fx-background-color: #f59e0b; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;"));
+
+        // File button - BLUE
+        fileButton = new Button("📎");
+        fileButton.setStyle(
+                "-fx-background-color: #3b82f6; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;");
+        fileButton.setOnMouseEntered(e -> fileButton.setStyle(
+                "-fx-background-color: #2563eb; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;"));
+        fileButton.setOnMouseExited(e -> fileButton.setStyle(
+                "-fx-background-color: #3b82f6; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;"));
+
+        // Voice button - GREEN
+        voiceButton = new Button("🎤");
+        voiceButton.setStyle(
+                "-fx-background-color: #22c55e; -fx-background-radius: 50; " +
+                        "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; " +
+                        "-fx-cursor: hand; -fx-font-size: 18px;");
+
+        // Voice recorder
+        voiceRecorder = new VoiceRecorder();
+        voiceRecorder.setOnRecordingProgress(durationMs -> {
+            javafx.application.Platform.runLater(() -> {
+                if (recordingTimeLabel != null) {
+                    recordingTimeLabel.setText(VoiceRecorder.formatTime(durationMs));
+                }
+            });
+        });
 
         statusLabel = new Label("Online");
         statusLabel.setStyle("-fx-text-fill: #4ade80; -fx-font-size: 11px;");
@@ -255,10 +304,146 @@ public class PrivateChatDialog extends Stage {
                 "-fx-background-color: white; " +
                         "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 4, 0, 0, -2);");
 
+        // Recording indicator (hidden by default)
+        Circle recordingDot = new Circle(6, Color.RED);
+        javafx.animation.Timeline blink = new javafx.animation.Timeline(
+                new javafx.animation.KeyFrame(Duration.seconds(0), e -> recordingDot.setOpacity(1)),
+                new javafx.animation.KeyFrame(Duration.seconds(0.5), e -> recordingDot.setOpacity(0.3)),
+                new javafx.animation.KeyFrame(Duration.seconds(1), e -> recordingDot.setOpacity(1)));
+        blink.setCycleCount(javafx.animation.Timeline.INDEFINITE);
+
+        recordingIndicator = new HBox(10);
+        recordingIndicator.setAlignment(Pos.CENTER_LEFT);
+        Label recordingLabel = new Label("Đang ghi âm...");
+        recordingLabel.setStyle("-fx-text-fill: #ef4444; -fx-font-weight: bold;");
+        recordingTimeLabel = new Label("0:00");
+        recordingTimeLabel.setStyle("-fx-text-fill: #64748b; -fx-font-size: 14px; -fx-font-weight: 600;");
+        Button cancelBtn = new Button("❌");
+        cancelBtn.setStyle("-fx-background-color: transparent; -fx-cursor: hand; -fx-font-size: 16px;");
+        cancelBtn.setOnAction(e -> cancelVoiceRecording(blink));
+        recordingIndicator.getChildren().addAll(recordingDot, recordingLabel, recordingTimeLabel, cancelBtn);
+        recordingIndicator.setVisible(false);
+        recordingIndicator.setManaged(false);
+        HBox.setHgrow(recordingIndicator, Priority.ALWAYS);
+
+        // Voice button event handlers
+        String voiceNormalStyle = "-fx-background-color: #22c55e; -fx-background-radius: 50; " +
+                "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; -fx-cursor: hand; -fx-font-size: 18px;";
+        String voiceHoverStyle = "-fx-background-color: #16a34a; -fx-background-radius: 50; " +
+                "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; -fx-cursor: hand; -fx-font-size: 18px;";
+        String voiceRecordingStyle = "-fx-background-color: #ef4444; -fx-background-radius: 50; " +
+                "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; -fx-cursor: hand; -fx-font-size: 18px;";
+
+        voiceButton.setOnMouseEntered(e -> {
+            if (!isVoiceRecording) {
+                voiceButton.setStyle(voiceHoverStyle);
+            }
+        });
+        voiceButton.setOnMouseExited(e -> {
+            if (!isVoiceRecording) {
+                voiceButton.setStyle(voiceNormalStyle);
+            }
+        });
+
+        // TAP TO TOGGLE: First tap starts, second tap stops and sends
+        voiceButton.setOnAction(e -> {
+            if (!isVoiceRecording) {
+                // Start recording
+                if (voiceRecorder.startRecording()) {
+                    isVoiceRecording = true;
+                    voiceButton.setStyle(voiceRecordingStyle);
+                    voiceButton.setText("⏹️"); // Stop icon
+
+                    // Show recording indicator
+                    recordingIndicator.setVisible(true);
+                    recordingIndicator.setManaged(true);
+                    inputField.setVisible(false);
+                    inputField.setManaged(false);
+                    blink.play();
+                }
+            } else {
+                // Stop and send
+                isVoiceRecording = false;
+                blink.stop();
+                recordingDot.setOpacity(1);
+                voiceButton.setStyle(voiceNormalStyle);
+                voiceButton.setText("🎤");
+
+                // Hide recording indicator
+                recordingIndicator.setVisible(false);
+                recordingIndicator.setManaged(false);
+                inputField.setVisible(true);
+                inputField.setManaged(true);
+
+                java.io.File voiceFile = voiceRecorder.stopRecording();
+                if (voiceFile != null && voiceFile.exists()) {
+                    sendVoiceMessage(voiceFile);
+                }
+            }
+        });
+
         HBox.setHgrow(inputField, Priority.ALWAYS);
-        inputArea.getChildren().addAll(fileButton, inputField, sendButton);
+        inputArea.getChildren().addAll(emojiButton, fileButton, voiceButton, recordingIndicator, inputField,
+                sendButton);
 
         return inputArea;
+    }
+
+    private void cancelVoiceRecording(javafx.animation.Timeline blink) {
+        if (isVoiceRecording) {
+            isVoiceRecording = false;
+            voiceRecorder.cancelRecording();
+            blink.stop();
+
+            // Reset UI
+            recordingIndicator.setVisible(false);
+            recordingIndicator.setManaged(false);
+            inputField.setVisible(true);
+            inputField.setManaged(true);
+
+            // Reset button style
+            voiceButton.setStyle(
+                    "-fx-background-color: #22c55e; -fx-background-radius: 50; " +
+                            "-fx-min-width: 42; -fx-min-height: 42; -fx-max-width: 42; -fx-max-height: 42; -fx-cursor: hand; -fx-font-size: 18px;");
+            voiceButton.setText("🎤");
+        }
+    }
+
+    private void sendVoiceMessage(java.io.File voiceFile) {
+        try {
+            if (webSocketClient != null && webSocketClient.isConnected()) {
+                // Upload voice file - backend automatically creates the message (like chatroom)
+                String fileUrl = chatService.uploadPrivateFile(targetUser.getId(), voiceFile.getAbsolutePath());
+
+                if (fileUrl != null && !fileUrl.isEmpty()) {
+                    // DON'T send via WebSocket - backend already created the message!
+                    // The message will arrive via WebSocket subscription automatically
+
+                    // Show local feedback immediately
+                    ChatMessage voiceMessage = ChatMessage.builder()
+                            .senderId(currentUser.getId())
+                            .senderUsername(currentUser.getUsername())
+                            .senderDisplayName(currentUser.getDisplayName())
+                            .recipientId(targetUser.getId())
+                            .content(fileUrl)
+                            .timestamp(LocalDateTime.now())
+                            .messageType(ChatMessage.MessageType.VOICE)
+                            .build();
+
+                    privateMessages.add(voiceMessage);
+                    addMessageToView(voiceMessage);
+
+                    log.info("🎤 Sent private voice message to {}", targetUser.getUsername());
+                } else {
+                    showError("Lỗi", "Không thể tải lên tin nhắn thoại");
+                }
+            } else {
+                showError("Lỗi", "Chưa kết nối đến server");
+            }
+        } catch (Exception e) {
+            log.error("Error sending private voice message", e);
+            showError("Lỗi", "Không thể gửi tin nhắn thoại: " + e.getMessage());
+        }
     }
 
     private void loadPrivateMessages() {
@@ -463,37 +648,182 @@ public class PrivateChatDialog extends Stage {
         bubble.setMaxWidth(280);
         bubble.setPadding(new Insets(10, 14, 10, 14));
 
-        // Bubble style - tím nhạt cho cả 2 bên (light mode)
-        if (isMine) {
+        // Check if this is a voice message - improved detection
+        String content = message.getContent() != null ? message.getContent().trim() : "";
+        boolean isVoiceMessage = message.getMessageType() == ChatMessage.MessageType.VOICE ||
+                content.contains("/uploads/voice/") ||
+                content.contains("/voice/") ||
+                content.endsWith(".wav") ||
+                content.endsWith(".mp3") ||
+                content.endsWith(".ogg");
+
+        log.debug("🎤 Message detection: type={}, content='{}', isVoice={}",
+                message.getMessageType(), content.length() > 50 ? content.substring(0, 50) + "..." : content,
+                isVoiceMessage);
+
+        if (isVoiceMessage && !isRecalled) {
+            // Voice message bubble style - PROMINENT
             bubble.setStyle(
-                    "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
-                            "-fx-background-radius: 18 18 4 18; " +
-                            "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 18 18 4 18; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
+                    "-fx-background-color: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%); " +
+                            "-fx-background-radius: " + (isMine ? "18 18 4 18" : "18 18 18 4") + "; " +
+                            "-fx-border-color: #818cf8; -fx-border-width: 2; " +
+                            "-fx-border-radius: " + (isMine ? "18 18 4 18" : "18 18 18 4") + "; " +
+                            "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.6), 15, 0, 0, 5);");
+
+            // Voice header
+            HBox voiceHeader = new HBox(10);
+            voiceHeader.setAlignment(Pos.CENTER_LEFT);
+            Label micEmoji = new Label("🎤");
+            micEmoji.setStyle("-fx-font-size: 20px;");
+            Label voiceLabel = new Label("Tin nhắn thoại");
+            voiceLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white;");
+            voiceHeader.getChildren().addAll(micEmoji, voiceLabel);
+
+            // Audio player controls
+            HBox playerControls = new HBox(12);
+            playerControls.setAlignment(Pos.CENTER_LEFT);
+            playerControls.setPadding(new Insets(4, 0, 0, 0));
+
+            // Play button
+            Button playBtn = new Button("▶");
+            playBtn.setStyle(
+                    "-fx-background-color: #22c55e; -fx-text-fill: white; -fx-background-radius: 50; " +
+                            "-fx-min-width: 44; -fx-min-height: 44; -fx-max-width: 44; -fx-max-height: 44; " +
+                            "-fx-font-size: 18px; -fx-font-weight: bold; -fx-cursor: hand; " +
+                            "-fx-border-color: white; -fx-border-width: 2; -fx-border-radius: 50;");
+
+            // Progress bar
+            ProgressBar progressBar = new ProgressBar(0);
+            progressBar.setPrefWidth(100);
+            progressBar.setPrefHeight(10);
+            progressBar.setStyle("-fx-accent: #22c55e; -fx-control-inner-background: rgba(255,255,255,0.4);");
+
+            // Duration label
+            Label durationLabel = new Label("0:00");
+            durationLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white; " +
+                    "-fx-background-color: rgba(0,0,0,0.3); -fx-padding: 4 8; -fx-background-radius: 10;");
+
+            // Audio player logic
+            final boolean[] isPlaying = { false };
+            final javax.sound.sampled.Clip[] clipRef = { null };
+
+            // Extract voice URL - handle both formats (just URL or with text prefix)
+            String voiceUrl = message.getContent();
+            if (voiceUrl != null && voiceUrl.contains("\n")) {
+                voiceUrl = voiceUrl.split("\n")[voiceUrl.split("\n").length - 1].trim();
+            }
+            final String finalVoiceUrl = voiceUrl != null ? voiceUrl.trim() : "";
+
+            playBtn.setOnAction(e -> {
+                try {
+                    if (finalVoiceUrl.isEmpty()) {
+                        showError("Lỗi", "URL tin nhắn thoại không hợp lệ");
+                        return;
+                    }
+
+                    if (clipRef[0] == null) {
+                        String fullUrl = finalVoiceUrl;
+                        if (!finalVoiceUrl.startsWith("http")) {
+                            fullUrl = chatService.getBaseUrl() + finalVoiceUrl;
+                        }
+
+                        java.net.URL audioUrl = new java.net.URL(fullUrl);
+                        java.io.InputStream audioStream = audioUrl.openStream();
+                        java.io.File tempFile = java.io.File.createTempFile("voice_", ".wav");
+                        tempFile.deleteOnExit();
+                        java.nio.file.Files.copy(audioStream, tempFile.toPath(),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        audioStream.close();
+
+                        javax.sound.sampled.AudioInputStream ais = javax.sound.sampled.AudioSystem
+                                .getAudioInputStream(tempFile);
+                        clipRef[0] = javax.sound.sampled.AudioSystem.getClip();
+                        clipRef[0].open(ais);
+
+                        long totalMs = clipRef[0].getMicrosecondLength() / 1000;
+                        javafx.application.Platform
+                                .runLater(() -> durationLabel.setText(VoiceRecorder.formatTime(totalMs)));
+
+                        clipRef[0].addLineListener(event -> {
+                            if (event.getType() == javax.sound.sampled.LineEvent.Type.STOP) {
+                                if (clipRef[0].getMicrosecondPosition() >= clipRef[0].getMicrosecondLength()) {
+                                    javafx.application.Platform.runLater(() -> {
+                                        playBtn.setText("▶");
+                                        progressBar.setProgress(0);
+                                        isPlaying[0] = false;
+                                        clipRef[0].setMicrosecondPosition(0);
+                                    });
+                                }
+                            }
+                        });
+
+                        java.util.Timer progressTimer = new java.util.Timer(true);
+                        progressTimer.scheduleAtFixedRate(new java.util.TimerTask() {
+                            @Override
+                            public void run() {
+                                if (clipRef[0] != null && clipRef[0].isRunning()) {
+                                    double progress = (double) clipRef[0].getMicrosecondPosition()
+                                            / clipRef[0].getMicrosecondLength();
+                                    javafx.application.Platform.runLater(() -> progressBar.setProgress(progress));
+                                }
+                            }
+                        }, 0, 100);
+                    }
+
+                    if (isPlaying[0]) {
+                        clipRef[0].stop();
+                        playBtn.setText("▶");
+                        isPlaying[0] = false;
+                    } else {
+                        clipRef[0].start();
+                        playBtn.setText("⏸");
+                        isPlaying[0] = true;
+                    }
+                } catch (Exception ex) {
+                    log.error("Error playing voice message: {}", ex.getMessage());
+                    showError("Lỗi", "Không thể phát tin nhắn thoại");
+                }
+            });
+
+            playerControls.getChildren().addAll(playBtn, progressBar, durationLabel);
+
+            Label timeLabel = new Label(message.getTimestamp().format(DateTimeFormatter.ofPattern("HH:mm")));
+            timeLabel.setStyle("-fx-text-fill: rgba(255,255,255,0.8); -fx-font-size: 10px; -fx-font-weight: 600;");
+
+            bubble.getChildren().addAll(voiceHeader, playerControls, timeLabel);
         } else {
-            bubble.setStyle(
-                    "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
-                            "-fx-background-radius: 18 18 18 4; " +
-                            "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 18 18 18 4; " +
-                            "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
+            // Regular message bubble style
+            if (isMine) {
+                bubble.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
+                                "-fx-background-radius: 18 18 4 18; " +
+                                "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 18 18 4 18; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
+            } else {
+                bubble.setStyle(
+                        "-fx-background-color: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); " +
+                                "-fx-background-radius: 18 18 18 4; " +
+                                "-fx-border-color: #a5b4fc; -fx-border-width: 2; -fx-border-radius: 18 18 18 4; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 10, 0, 0, 4);");
+            }
+
+            // Content
+            String displayName = message.getSenderDisplayName() != null
+                    ? message.getSenderDisplayName()
+                    : message.getSenderUsername();
+            String displayContent = isRecalled ? displayName + " đã thu hồi tin nhắn" : message.getContent();
+
+            Label contentLabel = new Label(displayContent);
+            contentLabel.setWrapText(true);
+            contentLabel.setMaxWidth(260);
+            contentLabel.setStyle("-fx-text-fill: #1e293b; -fx-font-size: 14px; -fx-font-weight: 500;" +
+                    (isRecalled ? " -fx-font-style: italic;" : ""));
+
+            Label timeLabel = new Label(message.getTimestamp().format(DateTimeFormatter.ofPattern("HH:mm")));
+            timeLabel.setStyle("-fx-text-fill: #64748b; -fx-font-size: 10px; -fx-font-weight: 600;");
+
+            bubble.getChildren().addAll(contentLabel, timeLabel);
         }
-
-        // Content
-        String displayName = message.getSenderDisplayName() != null
-                ? message.getSenderDisplayName()
-                : message.getSenderUsername();
-        String displayContent = isRecalled ? displayName + " đã thu hồi tin nhắn" : message.getContent();
-
-        Label contentLabel = new Label(displayContent);
-        contentLabel.setWrapText(true);
-        contentLabel.setMaxWidth(260);
-        contentLabel.setStyle("-fx-text-fill: #1e293b; -fx-font-size: 14px; -fx-font-weight: 500;" +
-                (isRecalled ? " -fx-font-style: italic;" : ""));
-
-        Label timeLabel = new Label(message.getTimestamp().format(DateTimeFormatter.ofPattern("HH:mm")));
-        timeLabel.setStyle("-fx-text-fill: #64748b; -fx-font-size: 10px; -fx-font-weight: 600;");
-
-        bubble.getChildren().addAll(contentLabel, timeLabel);
 
         // Context menu for recall - only for own messages within 2 minutes
         log.debug("🔍 Message recall check: isMine={}, isRecalled={}, messageId={}",

@@ -1386,10 +1386,27 @@ public class ChatService {
         }
 
         try (OutputStream os = conn.getOutputStream()) {
+            // Determine content type based on file extension
+            String contentType = "application/octet-stream";
+            String fileName = file.getName().toLowerCase();
+            if (fileName.endsWith(".wav")) {
+                contentType = "audio/wav";
+            } else if (fileName.endsWith(".mp3")) {
+                contentType = "audio/mpeg";
+            } else if (fileName.endsWith(".ogg")) {
+                contentType = "audio/ogg";
+            } else if (fileName.endsWith(".png")) {
+                contentType = "image/png";
+            } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                contentType = "image/jpeg";
+            } else if (fileName.endsWith(".gif")) {
+                contentType = "image/gif";
+            }
+
             // Write file data
             String header = "--" + boundary + "\r\n" +
                     "Content-Disposition: form-data; name=\"file\"; filename=\"" + file.getName() + "\"\r\n" +
-                    "Content-Type: application/octet-stream\r\n\r\n";
+                    "Content-Type: " + contentType + "\r\n\r\n";
 
             os.write(header.getBytes(StandardCharsets.UTF_8));
 
@@ -1458,16 +1475,32 @@ public class ChatService {
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
         conn.setDoOutput(true);
-
         if (jwtToken != null) {
             conn.setRequestProperty("Authorization", "Bearer " + jwtToken);
         }
 
         try (OutputStream os = conn.getOutputStream()) {
+            // Determine content type based on file extension
+            String contentType = "application/octet-stream";
+            String fileName = file.getName().toLowerCase();
+            if (fileName.endsWith(".wav")) {
+                contentType = "audio/wav";
+            } else if (fileName.endsWith(".mp3")) {
+                contentType = "audio/mpeg";
+            } else if (fileName.endsWith(".ogg")) {
+                contentType = "audio/ogg";
+            } else if (fileName.endsWith(".png")) {
+                contentType = "image/png";
+            } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+                contentType = "image/jpeg";
+            } else if (fileName.endsWith(".gif")) {
+                contentType = "image/gif";
+            }
+
             // Write file data
             String header = "--" + boundary + "\r\n" +
                     "Content-Disposition: form-data; name=\"file\"; filename=\"" + file.getName() + "\"\r\n" +
-                    "Content-Type: application/octet-stream\r\n\r\n";
+                    "Content-Type: " + contentType + "\r\n\r\n";
 
             os.write(header.getBytes(StandardCharsets.UTF_8));
 
