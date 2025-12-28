@@ -123,6 +123,13 @@ public class ChatClientFXApp extends Application {
                 }
             });
 
+            // Setup display name change callback to update sidebar display name
+            SettingsDialog.setDisplayNameChangeCallback(newDisplayName -> {
+                if (sidebar != null && newDisplayName != null) {
+                    Platform.runLater(() -> sidebar.setCurrentUser(newDisplayName));
+                }
+            });
+
             // Apply Atlantafx light theme
             Application.setUserAgentStylesheet(new PrimerLight().getUserAgentStylesheet());
 
@@ -708,10 +715,14 @@ public class ChatClientFXApp extends Application {
 
                     // Update UI status
                     contentArea.setOnlineStatus(true);
-                    sidebar.setCurrentUser(currentUsername);
+                    // Use displayName instead of username for sidebar header
+                    String currentDisplayName = currentUser != null && currentUser.getDisplayName() != null
+                            ? currentUser.getDisplayName()
+                            : currentUsername;
+                    sidebar.setCurrentUser(currentDisplayName);
                     // Load user avatar on sidebar
                     if (currentUser != null) {
-                        sidebar.setCurrentUserAvatar(currentUser.getAvatarUrl(), currentUsername);
+                        sidebar.setCurrentUserAvatar(currentUser.getAvatarUrl(), currentDisplayName);
                     }
 
                     // Load initial badge counts from backend

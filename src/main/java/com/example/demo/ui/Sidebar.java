@@ -711,12 +711,10 @@ public class Sidebar extends VBox {
         }
     }
 
-    public void setCurrentUser(String username) {
-        currentUserLabel.setText(username);
-        if (username != null && !username.isEmpty()) {
-            int hash = Math.abs(username.hashCode());
-            userAvatar.setFill(AVATAR_COLORS[hash % AVATAR_COLORS.length]);
-        }
+    public void setCurrentUser(String displayName) {
+        currentUserLabel.setText(displayName);
+        // Note: Don't change avatar here - avatar is set separately via
+        // setCurrentUserAvatar()
     }
 
     /**

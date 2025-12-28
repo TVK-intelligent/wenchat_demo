@@ -44,6 +44,7 @@ public class SettingsDialog extends Stage {
     private static boolean isDarkTheme = false;
     private static Consumer<String> avatarChangeCallback;
     private static Consumer<Boolean> themeChangeCallback;
+    private static Consumer<String> displayNameChangeCallback;
 
     // Local preferences for settings that backend may not support
     private static final Preferences prefs = Preferences.userNodeForPackage(SettingsDialog.class);
@@ -93,6 +94,16 @@ public class SettingsDialog extends Stage {
      */
     public static void setAvatarChangeCallback(Consumer<String> callback) {
         avatarChangeCallback = callback;
+    }
+
+    /**
+     * Set callback for display name changes
+     * 
+     * @param callback Consumer that receives the new display name when it is
+     *                 updated
+     */
+    public static void setDisplayNameChangeCallback(Consumer<String> callback) {
+        displayNameChangeCallback = callback;
     }
 
     /**
@@ -470,6 +481,11 @@ public class SettingsDialog extends Stage {
             prefs.putBoolean(prefKey, newShowOnlineStatus);
             log.info("💾 Saved showOnlineStatus={} to local preferences for user {}", newShowOnlineStatus,
                     currentUser.getId());
+
+            // Notify callback to update display name in other places (e.g. sidebar)
+            if (displayNameChangeCallback != null && newDisplayName != null && !newDisplayName.isEmpty()) {
+                displayNameChangeCallback.accept(newDisplayName);
+            }
 
             showSuccess("Thành công", "Đã lưu thay đổi thành công!");
         } else {
