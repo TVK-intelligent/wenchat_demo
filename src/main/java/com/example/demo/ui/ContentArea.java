@@ -1036,7 +1036,8 @@ public class ContentArea extends BorderPane {
             } else if (msg.getMessageType() == com.example.demo.client.model.ChatMessage.MessageType.VOICE) {
                 // 🎤 Voice message
                 addVoiceMessage(msg.getId(), displayName, msg.getContent(), 0, msg.getTimestamp(), isMine, false);
-            } else if (msg.getMessageType() == com.example.demo.client.model.ChatMessage.MessageType.FILE
+            } else if ((msg.getMessageType() == com.example.demo.client.model.ChatMessage.MessageType.FILE ||
+                    msg.getMessageType() == com.example.demo.client.model.ChatMessage.MessageType.IMAGE)
                     && msg.getFileName() != null && !msg.getFileName().isEmpty()) {
                 addFileMessage(msg.getId(), displayName, msg.getFileName(), msg.getContent(), msg.getTimestamp(),
                         isMine, false);
