@@ -1383,7 +1383,8 @@ public class ChatClientFXApp extends Application {
                         contentArea.addVoiceMessage(message.getId(), displayName, message.getContent(),
                                 0, // Duration will be determined from audio file
                                 message.getTimestamp(), isMine, false);
-                    } else if (message.getMessageType() == ChatMessage.MessageType.FILE) {
+                    } else if (message.getMessageType() == ChatMessage.MessageType.FILE ||
+                            message.getMessageType() == ChatMessage.MessageType.IMAGE) {
                         contentArea.addFileMessage(message.getId(), displayName, message.getFileName(),
                                 message.getContent(),
                                 message.getTimestamp(), isMine, false);
